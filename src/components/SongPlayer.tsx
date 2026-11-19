@@ -16,7 +16,7 @@ export function SongPlayer({ day, excerptUrl, onMedia }: Props) {
   useEffect(() => {
     if (!excerptUrl || !box.current) return;
     const el = new Audio();
-    el.crossOrigin = 'anonymous'; // живой анализ звука (бас, громкость) работает и для Supabase
+    if (/^https?:/.test(excerptUrl)) el.crossOrigin = 'anonymous'; // живой анализ звука работает и для Supabase
     const ws = WaveSurfer.create({
       container: box.current,
       media: el,

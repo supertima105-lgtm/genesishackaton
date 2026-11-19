@@ -55,11 +55,55 @@ function readBody(req: IncomingMessage): Promise<Buffer> {
   });
 }
 
+/**
+ * Автономная сборка: весь JS и CSS вшиваются прямо в index.html.
+ * Такой файл открывается двойным щелчком (file://), где браузер не грузит модули из соседних файлов.
+ */
+function inlineIntoHtml(): Plugin {
+  return {
+    name: 'inline-into-html',
+    apply: 'build',
+    enforce: 'post',
+    generateBundle(_, bundle) {
+      const html = Object.values(bundle).find((f) => f.type === 'asset' && f.fileName.endsWith('.html'));
+      if (!html || html.type !== 'asset') return;
+      let source = String(html.source);
+      for (const [name, file] of Object.entries(bundle)) {
+        if (file.type === 'chunk' && source.includes(file.fileName)) {
+          const code = file.code.replace(/<\/script/gi, '<\\/script');
+          source = source.replace(new RegExp(`<script[^>]*src="[^"]*${escapeRe(file.fileName)}"[^>]*></script>`), () => `<script type="module">${code}</script>`);
+          delete bundle[name];
+        } else if (file.type === 'asset' && file.fileName.endsWith('.css') && source.includes(file.fileName)) {
+          const css = String(file.source).replace(/<\/style/gi, '<\\/style');
+          source = source.replace(new RegExp(`<link[^>]*href="[^"]*${escapeRe(file.fileName)}"[^>]*>`), () => `<style>${css}</style>`);
+          delete bundle[name];
+        }
+      }
+      html.source = source;
+    },
+  };
+}
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export default defineConfig(({ mode }) => {
   // серверные ключи (без префикса VITE_) отдаём только в process.env dev-сервера
   const env = loadEnv(mode, process.cwd(), '');
   for (const k of ['GEMINI_API_KEY', 'GEMINI_MODEL', 'GEMINI_TTS_MODEL']) {
     if (env[k] && !process.env[k]) process.env[k] = env[k];
+  }
+  if (mode === 'standalone') {
+    return {
+      base: './',
+      plugins: [react(), tailwindcss(), inlineIntoHtml()],
+      build: {
+        outDir: 'docs',
+        emptyOutDir: true,
+        cssCodeSplit: false,
+        assetsInlineLimit: Number.MAX_SAFE_INTEGER,
+        chunkSizeWarningLimit: 4000,
+        rolldownOptions: { output: { codeSplitting: false } },
+      },
+    };
   }
   return {
     plugins: [react(), tailwindcss(), devApi()],

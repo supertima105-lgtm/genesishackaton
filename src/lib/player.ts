@@ -41,7 +41,7 @@ export function usePlayer(day: DayRecord, url?: string): Player {
   useEffect(() => {
     if (!url) return;
     const a = new Audio();
-    a.crossOrigin = 'anonymous'; // иначе звук с другого домена нельзя анализировать
+    if (/^https?:/.test(url)) a.crossOrigin = 'anonymous'; // иначе звук с другого домена нельзя анализировать
     a.loop = true;
     a.preload = 'auto';
     a.src = url;

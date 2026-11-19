@@ -2,6 +2,7 @@ import type { VoiceChoice } from './types';
 
 /** Озвучка через Gemini TTS (на сервере). null — если ключа нет или сервис недоступен. */
 export async function synthesize(text: string, voice: VoiceChoice): Promise<Blob | null> {
+  if (import.meta.env.MODE === 'standalone') return null; // офлайн-версия: читает голос браузера
   try {
     const r = await fetch('/api/tts', {
       method: 'POST',

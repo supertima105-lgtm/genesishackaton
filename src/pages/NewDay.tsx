@@ -19,6 +19,7 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
   const [gemini, setGemini] = useState<boolean | null>(null);
 
   useEffect(() => {
+    if (import.meta.env.MODE === 'standalone') return setGemini(false);
     fetch('/api/health')
       .then((r) => r.json())
       .then((d) => setGemini(Boolean(d.gemini)))
@@ -166,7 +167,13 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
             {busy ? <LoaderCircle size={14} className="animate-spin" /> : null} Собрать воспоминание
           </button>
           <span className="label">
-            {gemini === null ? '' : gemini ? 'анализ: Gemini' : 'анализ: эвристика (нет GEMINI_API_KEY)'}
+            {gemini === null
+              ? ''
+              : gemini
+                ? 'анализ: Gemini'
+                : import.meta.env.MODE === 'standalone'
+                  ? 'анализ: эвристика (офлайн-версия, без сервера)'
+                  : 'анализ: эвристика (нет GEMINI_API_KEY)'}
           </span>
         </div>
         {error && <p className="mt-4 text-sm text-rust">{error}</p>}

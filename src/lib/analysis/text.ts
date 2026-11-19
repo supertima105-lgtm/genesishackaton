@@ -14,6 +14,7 @@ export interface AnalyzeResponse {
 }
 
 export async function analyzeRemote(req: AnalyzeRequest): Promise<AnalyzeResponse | null> {
+  if (import.meta.env.MODE === 'standalone') return null; // офлайн-версия из одного index.html: сервера нет
   try {
     const r = await fetch('/api/analyze', {
       method: 'POST',
