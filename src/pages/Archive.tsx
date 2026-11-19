@@ -2,6 +2,7 @@ import { Clapperboard, Columns2, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { formatDate, MemoryCard } from '../components/memory/MemoryCard';
 import { YearStrip } from '../components/YearStrip';
+import { exportExamples, importExamples } from '../lib/examples';
 import { store } from '../lib/storage';
 import type { DayRecord } from '../lib/types';
 import { numberDays, plural, useDays, useFileUrls } from '../lib/useDays';
@@ -37,9 +38,12 @@ export function Archive() {
         <p className="mt-4 text-ink-soft">
           Начните с любимого дня: расскажите о нём, как близкому другу, добавьте настоящие фото и ту самую песню.
         </p>
-        <a href="#/new" className="btn btn-solid mt-8">
-          Записать первый день
-        </a>
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <a href="#/new" className="btn btn-solid">
+            Записать первый день
+          </a>
+          <ExamplesButton />
+        </div>
         <p className="label mt-6">хранилище: {store.kind === 'supabase' ? 'Supabase' : 'этот браузер (IndexedDB)'}</p>
       </section>
     );
@@ -85,6 +89,7 @@ export function Archive() {
         </div>
       ))}
       {filtered.length === 0 && <p className="label">Ничего не нашлось.</p>}
+      {import.meta.env.DEV && <DevExport />}
     </section>
   );
 }
@@ -102,6 +107,53 @@ function ArchiveCard({ day, number }: { day: DayRecord; number: number }) {
         <span className="label shrink-0">{formatDate(day.date).short}</span>
       </div>
     </a>
+  );
+}
+
+/** Пустой дневник: можно посмотреть на примеры дней. */
+function ExamplesButton() {
+  const [state, setState] = useState<'idle' | 'busy' | 'none'>('idle');
+  if (state === 'none') return <span className="label self-center">примеров нет в этой сборке</span>;
+  return (
+    <button
+      type="button"
+      className="btn"
+      disabled={state === 'busy'}
+      onClick={async () => {
+        setState('busy');
+        const n = await importExamples();
+        if (n) location.reload();
+        else setState('none');
+      }}
+    >
+      {state === 'busy' ? 'Открываю…' : 'Посмотреть примеры дней'}
+    </button>
+  );
+}
+
+/** Только в dev: текущий архив → public/examples (их подхватят деплой и автономный index.html). */
+function DevExport() {
+  const [msg, setMsg] = useState('');
+  return (
+    <div className="mt-16 flex flex-wrap items-center gap-3 border-t border-dashed border-line pt-4">
+      <span className="label">dev</span>
+      <button
+        type="button"
+        className="btn"
+        onClick={async () => {
+          setMsg('сохраняю…');
+          try {
+            const r = await exportExamples();
+            setMsg(`сохранено ${r.days} дн., ${r.mb} МБ → public/examples. Пересоберите index.html: npm run build:standalone`);
+          } catch (e) {
+            setMsg(`ошибка: ${(e as Error).message}`);
+          }
+        }}
+      >
+        Сохранить архив как примеры
+      </button>
+      <span className="text-sm text-ink-soft">{msg}</span>
+    </div>
   );
 }
 

@@ -2,6 +2,59 @@ import { defineConfig, loadEnv, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import type { IncomingMessage } from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+
+const EXAMPLES = path.resolve(process.cwd(), 'public/examples');
+const safePath = (p: string) => /^[\w\-.]+(\/[\w\-.]+)*$/.test(p) && !p.split('/').includes('..');
+
+/**
+ * Примеры дней. В dev архив можно сохранить в public/examples (кнопка в архиве):
+ * POST /__examples/reset, /__examples/file?path=…, /__examples/manifest.
+ * Сайт подхватывает их при первом открытии, а автономная сборка вшивает их в index.html
+ * через виртуальный модуль virtual:examples.
+ */
+function examples(inline: boolean): Plugin {
+  const id = 'virtual:examples';
+  return {
+    name: 'examples',
+    resolveId: (s) => (s === id ? '\0' + id : null),
+    load(s) {
+      if (s !== '\0' + id) return null;
+      const manifestPath = path.join(EXAMPLES, 'manifest.json');
+      if (!inline || !fs.existsSync(manifestPath)) return 'export default null;';
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as { files: { path: string }[] };
+      const files: Record<string, string> = {};
+      for (const f of manifest.files) files[f.path] = fs.readFileSync(path.join(EXAMPLES, 'files', f.path)).toString('base64');
+      return `export default ${JSON.stringify({ manifest, files })};`;
+    },
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url?.startsWith('/__examples/') || req.method !== 'POST') return next();
+        const u = new URL(req.url, 'http://localhost');
+        try {
+          if (u.pathname === '/__examples/reset') {
+            fs.rmSync(EXAMPLES, { recursive: true, force: true });
+            fs.mkdirSync(path.join(EXAMPLES, 'files'), { recursive: true });
+          } else if (u.pathname === '/__examples/file') {
+            const p = u.searchParams.get('path') ?? '';
+            if (!safePath(p)) throw new Error(`bad path ${p}`);
+            const dest = path.join(EXAMPLES, 'files', p);
+            fs.mkdirSync(path.dirname(dest), { recursive: true });
+            fs.writeFileSync(dest, await readBody(req));
+          } else if (u.pathname === '/__examples/manifest') {
+            fs.writeFileSync(path.join(EXAMPLES, 'manifest.json'), await readBody(req));
+          } else return next();
+          res.statusCode = 204;
+          res.end();
+        } catch (e) {
+          res.statusCode = 400;
+          res.end(String((e as Error).message));
+        }
+      });
+    },
+  };
+}
 
 /**
  * В dev-режиме обслуживает файлы из /api так же, как это делает Vercel в проде:
@@ -94,7 +147,8 @@ export default defineConfig(({ mode }) => {
   if (mode === 'standalone') {
     return {
       base: './',
-      plugins: [react(), tailwindcss(), inlineIntoHtml()],
+      publicDir: false, // примеры уже вшиты в файл — копировать папку не нужно
+      plugins: [react(), tailwindcss(), examples(true), inlineIntoHtml()],
       build: {
         outDir: 'docs',
         emptyOutDir: true,
@@ -106,6 +160,6 @@ export default defineConfig(({ mode }) => {
     };
   }
   return {
-    plugins: [react(), tailwindcss(), devApi()],
+    plugins: [react(), tailwindcss(), devApi(), examples(false)],
   };
 });
