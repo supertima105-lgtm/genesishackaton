@@ -8,6 +8,9 @@ export function numberDays(days: DayRecord[]): Map<string, number> {
   return new Map(asc.map((d, i) => [d.id, i + 1]));
 }
 
+/** Сегодняшняя дата по местному времени, YYYY-MM-DD. */
+export const localToday = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
 /** 1 день, 2 дня, 5 дней. */
 export function plural(n: number, one: string, few: string, many: string) {
   const m10 = n % 10;

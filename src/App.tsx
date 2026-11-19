@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Archive } from './pages/Archive';
+import { CalendarPage } from './pages/CalendarPage';
 import { ComparePage } from './pages/ComparePage';
 import { DayPage } from './pages/DayPage';
 import { NewDay } from './pages/NewDay';
@@ -23,6 +24,8 @@ export function App() {
   const route = useRoute();
   const dayMatch = route.match(/^\/day\/([^/]+)(\/kino)?$/);
   const cmpMatch = route.match(/^\/compare(?:\/([^/]+))?(?:\/([^/]+))?$/);
+  const calMatch = route.match(/^\/calendar(?:\/(\d{4}(?:-\d{2})?))?$/);
+  const newMatch = route.match(/^\/new(?:\?date=(\d{4}-\d{2}-\d{2}))?$/);
   if (route === '/show') return <ShowPage />;
 
   return (
@@ -35,6 +38,9 @@ export function App() {
         <nav className="flex items-center gap-2 sm:gap-3">
           <a href="#/" className={`label px-2 py-1 ${route === '/' ? 'text-ink underline underline-offset-4' : ''}`}>
             Архив
+          </a>
+          <a href="#/calendar" className={`label px-2 py-1 ${calMatch ? 'text-ink underline underline-offset-4' : ''}`}>
+            Календарь
           </a>
           <a href="#/compare" className={`label hidden px-2 py-1 md:inline ${cmpMatch ? 'text-ink underline underline-offset-4' : ''}`}>
             Сравнить
@@ -54,8 +60,10 @@ export function App() {
         <div className="h-px bg-line" />
       </div>
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-8">
-        {route === '/new' ? (
-          <NewDay />
+        {newMatch ? (
+          <NewDay key={route} initialDate={newMatch[1]} />
+        ) : calMatch ? (
+          <CalendarPage period={calMatch[1]} />
         ) : route === '/system' ? (
           <SystemPage />
         ) : cmpMatch ? (

@@ -105,10 +105,10 @@ export function YearStrip({ days }: { days: DayRecord[] }) {
         ))}
       </div>
       <div className="mt-1.5 grid grid-cols-12">
-        {MONTHS.map((m) => (
-          <span key={m} className="font-mono text-[10px] tracking-wider text-ink-soft uppercase">
+        {MONTHS.map((m, i) => (
+          <a key={m} href={`#/calendar/${year}-${String(i + 1).padStart(2, '0')}`} className="font-mono text-[10px] tracking-wider text-ink-soft uppercase hover:text-ink hover:underline">
             {m}
-          </span>
+          </a>
         ))}
       </div>
       <p className="mt-2 min-h-5 text-sm">

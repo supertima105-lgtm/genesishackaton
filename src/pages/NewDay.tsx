@@ -1,12 +1,12 @@
 import { Check, Circle, ImagePlus, LoaderCircle, Minus, Music2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { createDay, type Step } from '../lib/pipeline';
+import { localToday } from '../lib/useDays';
 
-const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-
-export function NewDay() {
+/** initialDate — когда день записывают из календаря задним числом. */
+export function NewDay({ initialDate }: { initialDate?: string }) {
   const [text, setText] = useState('');
-  const [date, setDate] = useState(today());
+  const [date, setDate] = useState(initialDate && initialDate <= localToday() ? initialDate : localToday());
   const [photos, setPhotos] = useState<File[]>([]);
   const [artist, setArtist] = useState('');
   const [title, setTitle] = useState('');
@@ -68,7 +68,9 @@ export function NewDay() {
   return (
     <div className="grid gap-12 lg:grid-cols-[1fr_380px]">
       <section>
-        <h1 className="font-serif text-3xl">Как прошёл день?</h1>
+        <h1 className="font-serif text-3xl">
+          {date === localToday() ? 'Как прошёл день?' : `Как прошло ${new Date(date + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}?`}
+        </h1>
         <p className="mt-2 max-w-2xl text-ink-soft">
           Пишите так, как рассказали бы близкому другу: погода, свет, запахи, звуки, кто был рядом, мелочи, которые запомнились.
         </p>
@@ -76,7 +78,7 @@ export function NewDay() {
         <div className="mt-8">
           <div className="flex items-baseline justify-between">
             <span className="label">01 · запись</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="label bg-transparent" />
+            <input type="date" value={date} max={localToday()} onChange={(e) => setDate(e.target.value)} className="label bg-transparent" />
           </div>
           <textarea
             value={text}

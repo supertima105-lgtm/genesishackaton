@@ -380,7 +380,10 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
               </h1>
             )}
             <div className="label mt-1">
-              {date.long} · {date.weekday} · страница № {number}
+              <a href={`#/calendar/${day.date.slice(0, 7)}`} className="hover:text-ink hover:underline" title="Открыть месяц в календаре">
+                {date.long}
+              </a>{' '}
+              · {date.weekday} · страница № {number}
             </div>
           </div>
         </div>
