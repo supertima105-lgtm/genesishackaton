@@ -1,0 +1,181 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-serif: 'Cormorant Garamond', Georgia, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-hand: 'Caveat', cursive;
+  --color-paper: #efeae2;
+  --color-paper-2: #e6dfd4;
+  --color-ink: #1f1c19;
+  --color-ink-soft: #5d554c;
+  --color-line: #d4cabc;
+  --color-rust: #a8432a;
+}
+
+html,
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+}
+
+.label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-ink);
+  padding: 0.55rem 1rem;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: background 0.15s, color 0.15s;
+}
+.btn:hover:not(:disabled) {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn-solid {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+.btn-solid:hover:not(:disabled) {
+  background: var(--color-rust);
+  border-color: var(--color-rust);
+}
+
+.field {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--color-line);
+  padding: 0.5rem 0;
+  outline: none;
+}
+.field:focus {
+  border-color: var(--color-ink);
+}
+
+/* ── погода поверх окна фото ─────────────────────────────── */
+.wx-rain {
+  background-image: repeating-linear-gradient(
+    102deg,
+    transparent 0 22px,
+    rgba(235, 242, 248, 0.55) 22px 23px,
+    transparent 23px 58px
+  );
+  background-size: 100% 140px;
+  animation: wx-fall linear infinite;
+  mix-blend-mode: screen;
+}
+.wx-rain-far {
+  background-image: repeating-linear-gradient(98deg, transparent 0 13px, rgba(235, 242, 248, 0.4) 13px 14px, transparent 14px 31px);
+  background-size: 100% 90px;
+}
+.wx-snow {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 2px, transparent 2.5px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.8) 0 1.4px, transparent 2px);
+  background-size: 64px 64px, 37px 37px;
+  background-position: 0 0, 18px 22px;
+  animation: wx-snow 9s linear infinite;
+}
+.wx-snow-far {
+  background-size: 41px 41px, 23px 23px;
+  animation-duration: 15s;
+  filter: blur(0.6px);
+}
+.wx-fog {
+  background: radial-gradient(60% 40% at 30% 60%, rgba(255, 255, 255, 0.55), transparent 70%),
+    radial-gradient(50% 35% at 75% 40%, rgba(255, 255, 255, 0.45), transparent 70%);
+  animation: wx-drift 18s ease-in-out infinite alternate;
+}
+.wx-sun {
+  background: linear-gradient(125deg, rgba(255, 214, 150, 0.85) 0%, rgba(255, 190, 120, 0.25) 30%, transparent 55%);
+  mix-blend-mode: screen;
+  animation: wx-breathe 7s ease-in-out infinite alternate;
+}
+.wx-flash {
+  background: white;
+  opacity: 0;
+  animation: wx-flash 9s steps(1) infinite;
+}
+@keyframes wx-fall {
+  from { background-position: 0 0; }
+  to { background-position: -40px 140px; }
+}
+@keyframes wx-snow {
+  from { background-position: 0 0, 18px 22px; }
+  to { background-position: 40px 256px, -10px 170px; }
+}
+@keyframes wx-drift {
+  from { transform: translateX(-6%); }
+  to { transform: translateX(6%); }
+}
+@keyframes wx-breathe {
+  from { opacity: 0.25; }
+  to { opacity: 0.6; }
+}
+@keyframes wx-flash {
+  0%, 100% { opacity: 0; }
+  62% { opacity: 0.35; }
+  63% { opacity: 0; }
+  65% { opacity: 0.2; }
+  66% { opacity: 0; }
+}
+
+/* ── ползунки осей настроения ────────────────────────────── */
+.axis-range {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+  cursor: pointer;
+}
+.axis-range::-webkit-slider-runnable-track {
+  height: 1px;
+  background: var(--color-line);
+}
+.axis-range::-moz-range-track {
+  height: 1px;
+  background: var(--color-line);
+}
+.axis-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -5.5px;
+  border-radius: 50%;
+  background: var(--thumb);
+  box-shadow: 0 0 0 2px var(--color-paper), 0 0 0 3px var(--ring);
+}
+.axis-range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--thumb);
+  box-shadow: 0 0 0 2px var(--color-paper), 0 0 0 3px var(--ring);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-rust);
+  outline-offset: 2px;
+}
