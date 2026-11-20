@@ -94,7 +94,7 @@ function MonthView({ y, m, byDate, today }: { y: number; m: number; byDate: Map<
             ))}
             {cells.map((date, i) => (date ? <DayCell key={date} date={date} list={byDate.get(date)} today={today} /> : <div key={`e${i}`} />))}
           </div>
-          <p className="label mt-4 normal-case tracking-normal">Пустая прошедшая дата — нажмите, чтобы записать этот день. ← → листают месяцы.</p>
+          <p className="label mt-4 normal-case tracking-normal">← → — месяцы</p>
         </div>
         <MonthMood y={y} m={m} days={monthDays} />
       </div>
@@ -186,7 +186,7 @@ function MonthMood({ y, m, days }: { y: number; m: number; days: DayRecord[] }) 
     return (
       <aside>
         <div className="label">настроение месяца</div>
-        <p className="mt-3 text-ink-soft">В этом месяце записей нет. Выберите прошедший день в сетке, чтобы записать его.</p>
+        <p className="mt-3 text-ink-soft">В этом месяце записей нет.</p>
       </aside>
     );
 

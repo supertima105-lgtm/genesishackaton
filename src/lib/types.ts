@@ -69,6 +69,8 @@ export interface SongInfo {
   artist: string;
   title: string;
   link?: EmbedInfo;
+  /** имя уже сверено со ссылкой (или введено вручную при наличии ссылки) — больше не трогаем */
+  checked?: boolean;
   excerptStart?: number;
   excerptDuration?: number;
 }
@@ -84,6 +86,30 @@ export interface Axes {
   social: number;
   nature: number;
   pace: number; // темп музыки и событий
+}
+
+/**
+ * Второй слой ощущений — считается по кнопке «Глубже в день». На кадр не влияет: это то, что человек
+ * чувствовал, а не то, как выглядит страница. Все шкалы 0..1.
+ */
+export interface FeelAxes {
+  love: number; // равнодушие … любовь
+  freedom: number; // скованность … свобода
+  wonder: number; // обыденность … восторг
+  gratitude: number; // досада … благодарность
+  hope: number; // безнадёжность … надежда
+  play: number; // серьёзно … игриво
+  vigor: number; // усталость … бодрость
+  novelty: number; // рутина … впервые
+  meaning: number; // обычный … особенный
+  loudness: number; // тишина … шум
+  light: number; // темно … светло
+}
+
+export interface DayFeel {
+  system: FeelAxes; // как решила система
+  axes: FeelAxes; // с поправками человека
+  source: 'gemini' | 'heuristic';
 }
 
 export interface ShaderParams {
@@ -173,6 +199,8 @@ export interface DayRecord {
   titleEdited?: boolean;
   /** «Не так ощущалось»: оси, которые человек поправил вручную. Пересборка их сохраняет. */
   axesOverride?: Partial<Axes>;
+  /** «Глубже в день»: дополнительные оси, считаются по кнопке */
+  feel?: DayFeel;
   signals: { text: TextSignals; photo: PhotoSignals; music: MusicSignals; weather?: WeatherSignals };
   axes: Axes;
   style: StyleParams;

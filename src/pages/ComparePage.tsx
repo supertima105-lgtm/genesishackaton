@@ -77,10 +77,6 @@ export function ComparePage({ a, b }: { a?: string; b?: string }) {
   return (
     <section>
       <h1 className="font-serif text-3xl">Один дневник — два настроения</h1>
-      <p className="mt-2 max-w-3xl text-ink-soft">
-        Постоянное держит дни вместе, переменное передаёт, как каждый из них ощущался. Включите оба по очереди: страница слышит свою песню
-        по-разному.
-      </p>
 
       <div className="mt-8 grid gap-8 md:grid-cols-2">
         {([A, B] as const).map((d, side) => (

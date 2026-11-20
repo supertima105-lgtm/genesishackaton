@@ -36,7 +36,7 @@ export function Archive() {
       <section className="mx-auto max-w-xl py-16 text-center">
         <p className="font-serif text-3xl leading-tight">Дневник пока пуст.</p>
         <p className="mt-4 text-ink-soft">
-          Начните с любимого дня: расскажите о нём, как близкому другу, добавьте настоящие фото и ту самую песню.
+          Начните с любимого дня: текст, фото и та самая песня.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <a href="#/new" className="btn btn-solid">

@@ -25,9 +25,11 @@ import { WhyPanel } from '../components/WhyPanel';
 import { downloadBlob, exportFolderZip, folderName } from '../lib/folder';
 import { baseOf, rebuildDay, restyle, retuneDay, systemAxes, type Step } from '../lib/pipeline';
 import { usePlayer } from '../lib/player';
+import { lookupSong } from '../lib/songMeta';
 import { store } from '../lib/storage';
 import { speakInBrowser } from '../lib/tts';
-import type { Axes, DayRecord } from '../lib/types';
+import { computeFeel, quickFeel } from '../lib/analysis/feel';
+import type { Axes, DayFeel, DayRecord, FeelAxes } from '../lib/types';
 
 const overrideKey = (o: Partial<Axes>) =>
   JSON.stringify(
@@ -178,6 +180,68 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
     },
     [day],
   );
+
+  // ── «Глубже в день»: второй слой ощущений, считается по кнопке, кадр не трогает ──
+  const [feel, setFeel] = useState<DayFeel | undefined>(day.feel);
+  const [feelBusy, setFeelBusy] = useState(false);
+  const feelTimer = useRef<number | undefined>(undefined);
+  const storeFeel = async (f: DayFeel | undefined) => {
+    const latest = (await store.get(day.id)) ?? day;
+    const next = { ...latest, feel: f };
+    await store.save(next);
+    onChange(next);
+  };
+  const computeFeelNow = async () => {
+    setFeelBusy(true);
+    try {
+      const latest = (await store.get(day.id)) ?? day;
+      setFeel(quickFeel(latest)); // сразу — по словам и измерениям; ответ Gemini подвинет ползунки
+      const f = await computeFeel(latest);
+      setFeel(f);
+      await storeFeel(f);
+    } finally {
+      setFeelBusy(false);
+    }
+  };
+  const onFeelAxis = (k: keyof FeelAxes, v: number) => {
+    if (!feel) return;
+    const f = { ...feel, axes: { ...feel.axes, [k]: Math.abs(feel.system[k] - v) < 0.015 ? feel.system[k] : v } };
+    setFeel(f);
+    window.clearTimeout(feelTimer.current);
+    feelTimer.current = window.setTimeout(() => void storeFeel(f), 500);
+  };
+  const resetFeel = () => {
+    if (!feel) return;
+    const f = { ...feel, axes: feel.system };
+    setFeel(f);
+    void storeFeel(f);
+  };
+  useEffect(() => () => window.clearTimeout(feelTimer.current), []);
+
+  // ── старые записи: исполнитель и название — один раз по ссылке ──
+  useEffect(() => {
+    const url = day.song.link?.url;
+    if (!url || day.song.checked) return;
+    let alive = true;
+    void lookupSong(url).then(async (m) => {
+      if (!m) return; // сервис не ответил — попробуем при следующем открытии
+      const latest = (await store.get(day.id)) ?? day;
+      const song = { ...latest.song, checked: true, artist: m.artist || latest.song.artist, title: m.title || latest.song.title };
+      const changed = song.artist !== latest.song.artist || song.title !== latest.song.title;
+      const next = { ...latest, song, ...(changed ? { cover: undefined } : {}) };
+      await store.save(next);
+      if (!alive) return;
+      if (changed) {
+        coverSaved.current = false;
+        setCoverKey((k) => k + 1);
+      }
+      onChange(next);
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day.id]);
 
   // ── действия с папкой ───────────────────────────────────────
   const download = async () => {
@@ -395,19 +459,15 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
             <SongPlayer day={day} excerptUrl={excerptUrl} onMedia={onMedia} />
             <div>
               <div className="label">голос записи</div>
-              <p className="mt-1 text-sm">
-                {day.style.voice.label} · {day.voice ? `Gemini TTS, голос ${day.style.voice.name}` : 'голос браузера'}
+              <p className="mt-1 text-sm" title={`«${day.style.voice.style}»`}>
+                {day.style.voice.label}
               </p>
-              <p className="mt-1 text-sm text-ink-soft">«{day.style.voice.style}»</p>
             </div>
             <div>
               <div className="label">папка дня</div>
-              <div className="mt-1 font-mono text-sm">📁 {day.folder}</div>
-              <ul className="mt-2 space-y-0.5 pl-6 font-mono text-xs text-ink-soft">
-                {files.map((f) => (
-                  <li key={f}>└ {f}</li>
-                ))}
-              </ul>
+              <div className="mt-1 font-mono text-sm" title={files.join('\n')}>
+                📁 {day.folder} <span className="text-ink-soft">· {files.length} файлов</span>
+              </div>
               {videoUrl && <video src={videoUrl} controls className="mt-3 w-40 border border-line" />}
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
@@ -429,7 +489,7 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
                   <Trash2 size={14} />
                 </button>
               </div>
-              {busy === 'video' && <p className="label mt-2 normal-case tracking-normal">Не переключайте вкладку, пока идёт запись: кадры рисуются вживую.</p>}
+              {busy === 'video' && <p className="label mt-2 normal-case tracking-normal">Не переключайте вкладку, пока идёт запись.</p>}
               {steps.length > 0 && (
                 <div className="mt-4">
                   <StepList steps={steps} />
@@ -465,6 +525,7 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
               onReset: () => retune({}),
               onRevert: () => setOverride(day.axesOverride ?? {}),
             }}
+            feel={{ value: feel, busy: feelBusy, onCompute: () => void computeFeelNow(), onAxis: onFeelAxis, onReset: resetFeel }}
           />
         </div>
       </div>

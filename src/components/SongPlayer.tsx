@@ -42,32 +42,27 @@ export function SongPlayer({ day, excerptUrl, onMedia }: Props) {
   const embed = day.song.link?.embedUrl;
   const height = day.song.link?.provider === 'spotify' ? 152 : day.song.link?.provider === 'youtube' ? 200 : 120;
 
+  const showEmbed = !excerptUrl && embed;
+
   return (
     <div>
       <div className="label">песня дня</div>
-      <div className="mt-1 font-serif text-xl">
-        {day.song.artist} — {day.song.title}
-      </div>
-      {excerptUrl && <div ref={box} className="mt-3" />}
-      {excerptUrl && (
-        <p className="label mt-1 normal-case tracking-normal">
-          фрагмент {Math.round(day.song.excerptDuration ?? 0)} с — самый энергичный участок; страница дышит в его доли
-        </p>
+      {/* у встроенного плеера своё название и исполнитель — не дублируем */}
+      {!showEmbed && (
+        <div className="mt-1 font-serif text-xl">
+          {day.song.artist} — {day.song.title}
+        </div>
       )}
-      {!excerptUrl && embed && (
-        <>
-          <iframe
-            title="Песня дня"
-            src={embed}
-            height={height}
-            className="mt-3 w-full border-0"
-            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            loading="lazy"
-          />
-          <p className="label mt-1 normal-case tracking-normal">
-            включите плеер и «Прожить день» — страница идёт в темпе ~{Math.round(day.style.motion.bpm)} BPM
-          </p>
-        </>
+      {excerptUrl && <div ref={box} className="mt-3" />}
+      {showEmbed && (
+        <iframe
+          title="Песня дня"
+          src={embed}
+          height={height}
+          className="mt-3 w-full border-0"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          loading="lazy"
+        />
       )}
       {!excerptUrl && !embed && day.song.link?.url && (
         <a href={day.song.link.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm underline underline-offset-4">

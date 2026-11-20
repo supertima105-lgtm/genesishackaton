@@ -1,6 +1,7 @@
 import { Check, Circle, ImagePlus, LoaderCircle, Minus, Music2, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createDay, type Step } from '../lib/pipeline';
+import { lookupSong, readAudioTags, type SongMeta } from '../lib/songMeta';
 import { localToday } from '../lib/useDays';
 
 /** initialDate — когда день записывают из календаря задним числом. */
@@ -29,7 +30,43 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
   const previews = useMemo(() => photos.map((f) => URL.createObjectURL(f)), [photos]);
   useEffect(() => () => previews.forEach(URL.revokeObjectURL), [previews]);
 
-  const songOk = Boolean(audio) || (artist.trim() && title.trim());
+  // ── песня: исполнитель и название определяются сами, ручная правка важнее ──
+  const touched = useRef({ artist: false, title: false });
+  const lookup = useRef<Promise<SongMeta | null> | null>(null);
+  const [songFound, setSongFound] = useState<null | 'looking' | 'link' | 'file' | 'none'>(null);
+  const applyMeta = (m: SongMeta | null, from: 'link' | 'file') => {
+    if (!m) return;
+    if (m.artist && !touched.current.artist) setArtist(m.artist);
+    if (m.title && !touched.current.title) setTitle(m.title);
+    setSongFound(from);
+  };
+  useEffect(() => {
+    const url = link.trim();
+    if (!/^https?:\/\/\S+\.\S+/.test(url)) {
+      lookup.current = null;
+      setSongFound((s) => (s === 'link' || s === 'looking' || s === 'none' ? null : s));
+      return;
+    }
+    setSongFound('looking');
+    let alive = true;
+    const t = window.setTimeout(() => {
+      const p = lookupSong(url);
+      lookup.current = p;
+      void p.then((m) => {
+        if (!alive) return;
+        if (m) applyMeta(m, 'link');
+        else setSongFound('none');
+      });
+    }, 400);
+    return () => {
+      alive = false;
+      window.clearTimeout(t);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [link]);
+
+  const hasLink = /^https?:\/\/\S+\.\S+/.test(link.trim());
+  const songOk = Boolean(audio) || hasLink || Boolean(artist.trim() && title.trim());
   const ready = text.trim().length >= 20 && photos.length > 0 && songOk && !busy;
 
   const addPhotos = (files: FileList | null) => {
@@ -38,16 +75,9 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
     setPhotos((p) => [...p, ...imgs].slice(0, 8));
   };
 
-  const onAudio = (f?: File) => {
+  const onAudio = async (f?: File) => {
     setAudio(f);
-    if (f && !title) {
-      const name = f.name.replace(/\.[^.]+$/, '');
-      const [a, t] = name.split(/\s+[-–—]\s+/);
-      if (t) {
-        if (!artist) setArtist(a);
-        setTitle(t);
-      } else setTitle(name);
-    }
+    if (f && !hasLink) applyMeta(await readAudioTags(f), 'file');
   };
 
   const submit = async () => {
@@ -55,8 +85,16 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
     setError(null);
     setSteps([]);
     try {
+      // ссылку вставили и сразу нажали — дождёмся, пока узнаем песню
+      let a = artist.trim();
+      let t = title.trim();
+      if ((!a || !t) && lookup.current) {
+        const m = await lookup.current.catch(() => null);
+        if (!touched.current.artist) a = a || m?.artist || '';
+        if (!touched.current.title) t = t || m?.title || '';
+      }
       const day = await createDay(
-        { text: text.trim(), date, photos, artist: artist.trim() || 'Без исполнителя', title: title.trim() || 'Без названия', link: link.trim() || undefined, audio, withWeather },
+        { text: text.trim(), date, photos, artist: a || 'Без исполнителя', title: t || 'Без названия', link: link.trim() || undefined, audio, withWeather },
         (s) => setSteps((prev) => (prev.some((p) => p.id === s.id) ? prev.map((p) => (p.id === s.id ? s : p)) : [...prev, s])),
       );
       setTimeout(() => (location.hash = `#/day/${day.id}`), 900);
@@ -72,9 +110,7 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
         <h1 className="font-serif text-3xl">
           {date === localToday() ? 'Как прошёл день?' : `Как прошло ${new Date(date + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}?`}
         </h1>
-        <p className="mt-2 max-w-2xl text-ink-soft">
-          Пишите так, как рассказали бы близкому другу: погода, свет, запахи, звуки, кто был рядом, мелочи, которые запомнились.
-        </p>
+        <p className="mt-2 max-w-2xl text-ink-soft">Как рассказали бы другу: свет, звуки, кто был рядом.</p>
 
         <div className="mt-8">
           <div className="flex items-baseline justify-between">
@@ -126,39 +162,53 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
 
         <div className="mt-8">
           <span className="label">03 · песня дня</span>
-          <div className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
-            <input className="field" placeholder="Исполнитель" value={artist} onChange={(e) => setArtist(e.target.value)} />
-            <input className="field" placeholder="Название" value={title} onChange={(e) => setTitle(e.target.value)} />
-            <input className="field sm:col-span-2" placeholder="Ссылка: Spotify, Яндекс Музыка, YouTube, SoundCloud" value={link} onChange={(e) => setLink(e.target.value)} />
-          </div>
-          <label className="mt-4 flex cursor-pointer items-center gap-3 border border-dashed border-ink-soft/50 p-3 hover:border-ink">
+          <input
+            className="field mt-3 w-full"
+            placeholder="Ссылка: Spotify, YouTube, Яндекс Музыка, SoundCloud"
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+          />
+          <label className="mt-3 flex cursor-pointer items-center gap-3 border border-dashed border-ink-soft/50 p-3 hover:border-ink">
             <Music2 size={18} />
-            <span className="text-sm">
-              {audio ? audio.name : 'или аудиофайл — тогда система сама услышит темп, лад и энергию'}
-            </span>
+            <span className="text-sm">{audio ? audio.name : 'или аудиофайл — услышу темп и энергию'}</span>
             {audio && (
               <button type="button" className="ml-auto" aria-label="Убрать файл" onClick={(e) => (e.preventDefault(), setAudio(undefined))}>
                 <X size={14} />
               </button>
             )}
-            <input type="file" accept="audio/*" className="hidden" onChange={(e) => onAudio(e.target.files?.[0])} />
+            <input type="file" accept="audio/*" className="hidden" onChange={(e) => void onAudio(e.target.files?.[0])} />
           </label>
-          <p className="label mt-2 normal-case tracking-normal">
-            Целиком песня не хранится: в папку дня попадает только фрагмент ~40 с, остальное — ссылка.
+          <div className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+            <input
+              className="field"
+              placeholder="Исполнитель"
+              value={artist}
+              onChange={(e) => ((touched.current.artist = true), setArtist(e.target.value))}
+            />
+            <input
+              className="field"
+              placeholder="Название"
+              value={title}
+              onChange={(e) => ((touched.current.title = true), setTitle(e.target.value))}
+            />
+          </div>
+          <p className="label mt-2 h-4 normal-case tracking-normal">
+            {songFound === 'looking'
+              ? 'узнаю песню по ссылке…'
+              : songFound === 'link'
+                ? '✓ определено по ссылке — можно поправить'
+                : songFound === 'file'
+                  ? '✓ определено по файлу — можно поправить'
+                  : songFound === 'none'
+                    ? 'по ссылке не узнал — впишите сами'
+                    : ''}
           </p>
         </div>
 
-        <div className="mt-8">
-          <span className="label">04 · по желанию</span>
-          <label className="mt-3 flex cursor-pointer items-start gap-3">
-            <input type="checkbox" checked={withWeather} onChange={(e) => setWithWeather(e.target.checked)} className="mt-1 accent-[var(--color-ink)]" />
-            <span className="text-sm">
-              Добавить погоду этого дня
-              <span className="block text-ink-soft">
-                Браузер спросит геолокацию; координаты округляются до ~1 км и уходят только в Open-Meteo. Дождь и снег пойдут по кадру,
-                солнце даст ореол.
-              </span>
-            </span>
+        <div className="mt-6">
+          <label className="flex cursor-pointer items-center gap-3 text-sm" title="Браузер спросит геолокацию; координаты округляются до ~1 км и уходят только в Open-Meteo.">
+            <input type="checkbox" checked={withWeather} onChange={(e) => setWithWeather(e.target.checked)} className="accent-[var(--color-ink)]" />
+            Добавить погоду дня
           </label>
         </div>
 
@@ -180,17 +230,12 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
       </section>
 
       <aside className="lg:sticky lg:top-8 lg:self-start">
-        <span className="label">что делает система</span>
         {steps.length === 0 ? (
-          <ol className="mt-4 space-y-3 text-sm text-ink-soft">
-            <li>Смотрит на фото — палитра, свет, тёплые и холодные тона.</li>
-            <li>Слушает песню — темп, лад, энергия, жанр и эпоха.</li>
-            <li>Читает запись — настроение, время, место, люди.</li>
-            <li>Если разрешите — узнаёт погоду этого дня.</li>
-            <li>Сводит всё в оси настроения и выбирает «почерк» страницы.</li>
-            <li>Придумывает название и складывает всё в папку дня.</li>
-            <li>Озвучивает запись голосом, подобранным под атмосферу.</li>
-          </ol>
+          <ul className="space-y-2 text-sm text-ink-soft">
+            <li>фото → палитра</li>
+            <li>песня → ритм</li>
+            <li>текст → настроение</li>
+          </ul>
         ) : (
           <ol className="mt-4 space-y-4">
             {steps.map((s) => (

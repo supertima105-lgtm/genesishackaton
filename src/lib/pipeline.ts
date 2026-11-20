@@ -3,6 +3,7 @@ import { analyzePhotos, decodeImage, resizeToJpeg, toBase64Jpeg } from './analys
 import { analyzeRemote, analyzeTextHeuristic, type AnalyzeResponse } from './analysis/text';
 import { clamp } from './color';
 import { parseMusicLink } from './embed';
+import { lookupSong } from './songMeta';
 import { folderName, folderPath } from './folder';
 import { buildStyle } from './rules/engine';
 import { MODES } from './rules/modes';
@@ -176,6 +177,7 @@ export async function createDay(input: NewDayInput, report: Report): Promise<Day
       artist: input.artist,
       title: input.title,
       link: input.link ? parseMusicLink(input.link) : undefined,
+      checked: Boolean(input.link),
       excerptStart: audio?.excerptStart,
       excerptDuration: audio?.excerptDuration,
     },
@@ -198,7 +200,10 @@ export async function createDay(input: NewDayInput, report: Report): Promise<Day
 export async function rebuildDay(old: DayRecord, report: Report): Promise<DayRecord> {
   const blobs = await Promise.all(old.photos.map((r) => store.fileBlob(r)));
   const { photo, small } = await stepPhotos(blobs, report);
-  const { remote, text } = await stepText(old.text, old.date, small, { artist: old.song.artist, title: old.song.title, hasAudio: Boolean(old.songFile) }, report);
+  // имя песни — заново по ссылке (исправляет «не знаю — не знаю» у старых записей)
+  const found = old.song.link?.url && !old.song.checked ? await lookupSong(old.song.link.url) : null;
+  const song = found ? { ...old.song, artist: found.artist || old.song.artist, title: found.title || old.song.title, checked: true } : old.song;
+  const { remote, text } = await stepText(old.text, old.date, small, { artist: song.artist, title: song.title, hasAudio: Boolean(old.songFile) }, report);
   if (old.titleEdited) text.title = old.title;
 
   const prev = old.signals.music;
@@ -216,6 +221,7 @@ export async function rebuildDay(old: DayRecord, report: Report): Promise<DayRec
     ...old,
     title: text.title,
     folder: folderName(old.date, text.title),
+    song,
     signals: { text, photo, music, weather },
     axes,
     style,

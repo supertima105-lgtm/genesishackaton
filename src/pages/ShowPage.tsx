@@ -88,9 +88,6 @@ export function ShowPage() {
           <h1 className="mt-3 font-serif text-5xl leading-tight">
             Один дневник — {list.length} {plural(list.length, 'настроение', 'настроения', 'настроений')}
           </h1>
-          <p className="mt-4 max-w-2xl text-lg opacity-75">
-            Дни идут подряд, каждый со своей песней. Справа видно, почему страница выглядит так и что она слышит в музыке прямо сейчас.
-          </p>
           {list.length === 0 ? (
             <p className="mt-8 font-mono text-sm opacity-70">
               В дневнике пока нет дней. <a href="#/new" className="underline">Записать день</a>
@@ -183,7 +180,7 @@ export function ShowPage() {
             Один дневник. {list.length} {plural(list.length, 'день', 'разных дня', 'разных дней')}.
           </h2>
           <p className="mt-3 max-w-2xl text-lg opacity-75">
-            Формат, шапка, название и бумага не меняются. Почерк, палитра, ритм и голос рождаются из текста, фото и песни каждого дня.
+            Формат один. Почерк, палитра и ритм — из каждого дня.
           </p>
           <div className="mt-8 flex gap-3 overflow-x-auto pb-2">
             {list.map((d, k) => (
