@@ -1,4 +1,4 @@
-import { ChevronDown, LoaderCircle, RotateCcw, Save, Sparkles } from 'lucide-react';
+import { ChevronDown, LoaderCircle, Mail, RotateCcw, Save } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, type CSSProperties } from 'react';
 import { FEEL_AXES } from '../lib/analysis/feel';
@@ -14,6 +14,9 @@ export const AXES: { key: keyof Axes; left: string; right: string; signed?: bool
   { key: 'nature', left: 'город', right: 'природа' },
   { key: 'pace', left: 'медленно', right: 'быстро' },
 ];
+
+/** Цвета круглых наклеек на ползунках. */
+const STICKERS = ['#d9792b', '#e05a5a', '#2f4f8f', '#6aa36f', '#e8b33e', '#9a6bd1', '#3fa7a0'];
 
 export interface Tuning {
   base: Axes; // как решила система
@@ -35,25 +38,23 @@ export interface FeelTuning {
   onReset: () => void;
 }
 
-/** «Почему этот день выглядит так» — режим, оси (их можно подвинуть) и свёрнутое объяснение. */
+/** «Как ощущалось» — почерк страницы, оси (их можно подвинуть) и свёрнутое объяснение. */
 export function WhyPanel({ day, tuning, feel }: { day: DayRecord; tuning?: Tuning; feel?: FeelTuning }) {
   const mode = MODES[day.style.mode];
   const second = MODES[day.style.secondary];
   const { palette } = day.style;
-  const accent = palette.accent;
 
   return (
     <div>
-      <div className="label">почему так</div>
-
-      <div className="mt-4 border-l-2 pl-4" style={{ borderColor: accent }}>
-        <div className="font-serif text-2xl leading-tight">{mode.name}</div>
-        <div className="label mt-1 normal-case tracking-normal">{mode.reference}</div>
+      <div className="font-hand text-4xl leading-none font-bold">как ощущалось</div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span className="note text-[22px]">почерк: {mode.name}</span>
+        <span className="font-mono text-[11px] text-ink-soft">{mode.reference}</span>
       </div>
 
-      {tuning && <p className="mt-6 text-sm text-ink-soft">Не так ощущалось? Подвиньте.</p>}
-      <div className={`${tuning ? 'mt-3' : 'mt-6'} space-y-1.5`}>
-        {AXES.map(({ key, left, right, signed }) => {
+      {tuning && <p className="mt-5 font-mono text-xs text-ink-soft">не так? передвинь кружок</p>}
+      <div className={`${tuning ? 'mt-2' : 'mt-5'}`}>
+        {AXES.map(({ key, left, right, signed }, i) => {
           const v = day.axes[key];
           const pos = signed ? (v + 1) / 2 : v;
           const basePos = tuning ? (signed ? (tuning.base[key] + 1) / 2 : tuning.base[key]) : 0;
@@ -67,16 +68,16 @@ export function WhyPanel({ day, tuning, feel }: { day: DayRecord; tuning?: Tunin
               min={signed ? -1 : 0}
               basePos={basePos}
               moved={moved}
-              accent={accent}
+              color={STICKERS[i % STICKERS.length]}
               onChange={(x) => tuning.onAxis(key, x)}
             />
           ) : (
-            <div key={key} className="grid grid-cols-[96px_1fr_96px] items-center gap-2 text-xs">
-              <span className="text-right text-ink-soft">{left}</span>
-              <div className="relative h-px bg-line">
-                <span className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${pos * 100}%`, background: accent }} />
+            <div key={key} className="grid h-8 grid-cols-[104px_1fr_104px] items-center gap-2 font-hand text-[21px]">
+              <span className="text-right">{left}</span>
+              <div className="relative h-0.5 bg-[repeating-linear-gradient(90deg,rgba(43,38,32,.45)_0_6px,transparent_6px_10px)]">
+                <span className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full" style={{ left: `${pos * 100}%`, background: STICKERS[i % STICKERS.length] }} />
               </div>
-              <span className="text-ink-soft">{right}</span>
+              <span>{right}</span>
             </div>
           );
         })}
@@ -101,17 +102,20 @@ export function WhyPanel({ day, tuning, feel }: { day: DayRecord; tuning?: Tunin
         </div>
       )}
 
-      {feel && <FeelBlock feel={feel} accent={accent} />}
+      {feel && <FeelBlock feel={feel} />}
 
-      <div className="mt-6 flex items-center gap-1.5">
+      <div className="mt-8 flex flex-wrap gap-2">
         {[palette.paper, palette.ink, palette.accent, ...palette.shades].map((c, i) => (
-          <span key={i} className="h-6 flex-1 border border-ink/10" style={{ background: c }} title={c} />
+          <span key={i} className="chip" title={c}>
+            <i style={{ background: c }} />
+            {c.toUpperCase()}
+          </span>
         ))}
       </div>
 
       <details className="group mt-6">
-        <summary className="label flex cursor-pointer list-none items-center gap-1 hover:text-ink">
-          <ChevronDown size={12} className="transition group-open:rotate-180" /> как система решила
+        <summary className="flex cursor-pointer list-none items-center gap-1 font-hand text-2xl text-ink-soft hover:text-ink">
+          <ChevronDown size={16} className="transition group-open:rotate-180" /> как система решила
         </summary>
         <p className="mt-3 text-sm">{mode.why}</p>
         <p className="mt-1 text-sm text-ink-soft">
@@ -142,15 +146,15 @@ function AxisRow(p: {
   min: number;
   basePos: number;
   moved: boolean;
-  accent: string;
+  color: string;
   disabled?: boolean;
   onChange: (v: number) => void;
 }) {
   return (
-    <div className="grid grid-cols-[96px_1fr_96px] items-center gap-2 text-xs">
-      <span className={`text-right ${p.moved ? 'text-ink' : 'text-ink-soft'}`}>{p.left}</span>
+    <div className="grid h-8 grid-cols-[104px_1fr_104px] items-center gap-2 font-hand text-[21px] leading-none max-sm:grid-cols-[84px_1fr_84px] max-sm:text-[19px]">
+      <span className={`text-right ${p.moved ? 'text-blue' : ''}`}>{p.left}</span>
       <div className="relative">
-        <span className="pointer-events-none absolute top-1/2 h-3 w-px -translate-y-1/2 bg-ink/50" style={{ left: `${p.basePos * 100}%` }} />
+        <span className="pointer-events-none absolute top-1/2 h-3.5 w-0.5 -translate-y-1/2 rounded bg-ink/40" style={{ left: `${p.basePos * 100}%` }} />
         <input
           type="range"
           min={p.min}
@@ -161,15 +165,15 @@ function AxisRow(p: {
           onChange={(e) => p.onChange(Number(e.target.value))}
           aria-label={`${p.left} — ${p.right}`}
           className="axis-range"
-          style={{ '--thumb': p.accent, '--ring': p.moved ? 'var(--color-ink)' : 'transparent' } as CSSProperties}
+          style={{ '--thumb': p.color, '--ring': p.moved ? 'var(--color-blue)' : 'transparent' } as CSSProperties}
         />
       </div>
-      <span className={p.moved ? 'text-ink' : 'text-ink-soft'}>{p.right}</span>
+      <span className={p.moved ? 'text-blue' : ''}>{p.right}</span>
     </div>
   );
 }
 
-function FeelBlock({ feel, accent }: { feel: FeelTuning; accent: string }) {
+function FeelBlock({ feel }: { feel: FeelTuning }) {
   const [open, setOpen] = useState(false);
   const value = feel.value;
   const shown = open && value;
@@ -183,16 +187,24 @@ function FeelBlock({ feel, accent }: { feel: FeelTuning; accent: string }) {
   };
 
   return (
-    <div className="mt-6 border-t border-line pt-4">
-      <button type="button" className="btn" onClick={click} disabled={feel.busy} aria-expanded={Boolean(shown)}>
-        {feel.busy ? <LoaderCircle size={14} className="animate-spin" /> : <Sparkles size={14} />}
-        {feel.busy ? 'Вслушиваюсь в день…' : shown ? 'Свернуть' : 'Глубже в день'}
+    <div className="mt-7">
+      {/* конверт: внутри — второй слой ощущений */}
+      <button
+        type="button"
+        onClick={click}
+        disabled={feel.busy}
+        aria-expanded={Boolean(shown)}
+        className="inline-flex items-center gap-3 bg-[#e8d6b4] px-5 pt-7 pb-3 font-hand text-[26px] leading-none shadow-[0_8px_14px_-6px_rgba(0,0,0,.25)] transition hover:-rotate-2 hover:scale-[1.03] disabled:cursor-progress"
+        style={{ clipPath: 'polygon(0 0, 50% 26%, 100% 0, 100% 100%, 0 100%)' }}
+      >
+        {feel.busy ? <LoaderCircle size={18} className="animate-spin" /> : <Mail size={18} />}
+        {feel.busy ? 'вслушиваюсь в день…' : shown ? 'свернуть' : 'глубже в день'}
       </button>
 
       {shown && (
-        <div className="mt-4 space-y-1.5">
+        <div className="mt-4">
           {FEEL_AXES.map(({ key, left, right }, i) => (
-            <motion.div key={key} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06, duration: 0.35 }}>
+            <motion.div key={key} initial={{ opacity: 0, y: 8, rotate: -1 }} animate={{ opacity: 1, y: 0, rotate: 0 }} transition={{ delay: i * 0.06, duration: 0.35 }}>
               <AxisRow
                 left={left}
                 right={right}
@@ -200,7 +212,7 @@ function FeelBlock({ feel, accent }: { feel: FeelTuning; accent: string }) {
                 min={0}
                 basePos={value.system[key]}
                 moved={Math.abs(value.axes[key] - value.system[key]) > 0.02}
-                accent={accent}
+                color={STICKERS[(i + 3) % STICKERS.length]}
                 disabled={feel.busy}
                 onChange={(x) => feel.onAxis(key, x)}
               />

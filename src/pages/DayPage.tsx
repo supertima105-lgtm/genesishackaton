@@ -344,14 +344,23 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
     'стиль.json',
   ].filter(Boolean);
   const backdrop = `color-mix(in oklab, ${day.style.palette.paper} 14%, #0c0b0a)`;
+  const stampDate = new Date(day.date + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }).replace('.', '');
 
   return (
-    <div className="grid gap-10 lg:grid-cols-[minmax(0,560px)_1fr]">
-      <div>
+    <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
+      <div className="min-w-0">
         <div
-          className={kino ? 'fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 p-4' : 'lg:sticky lg:top-6'}
+          className={kino ? 'fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 p-4' : 'pt-3 lg:sticky lg:top-6'}
           style={kino ? { background: backdrop, transition: 'background .6s' } : undefined}
         >
+          {/* вне кино карточка дня — полароид на скотче; в кино рамки нет */}
+          <div className={kino ? 'contents' : 'polaroid mx-auto max-w-[480px] -rotate-[1.2deg]'}>
+          {!kino && (
+            <>
+              <span className="tape -top-3 left-10 -rotate-6" />
+              <span className="tape tape-blue -top-2 right-8 rotate-[8deg]" />
+            </>
+          )}
           <div ref={cardRef} className="relative w-full" style={kino ? { width: 'min(92vw, calc((100vh - 120px) * 0.8))' } : undefined}>
             {photoUrls && photoUrls.length > 0 ? (
               <MemoryCard
@@ -373,22 +382,28 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
               </div>
             )}
           </div>
+          {!kino && (
+            <div className="pointer-events-none absolute inset-x-3 bottom-2 truncate text-center font-hand text-[26px] leading-tight text-blue">
+              {day.signals.text.moodWords.join(' · ')}
+            </div>
+          )}
+          </div>
 
           {kino ? (
             <div className="flex items-center gap-2 text-paper">
-              <button type="button" className="btn border-paper/40 text-paper" onClick={() => go(prev)} disabled={!prev} aria-label="Предыдущий день">
+              <button type="button" className="btn border-paper/40 bg-transparent text-paper shadow-none hover:bg-white/10" onClick={() => go(prev)} disabled={!prev} aria-label="Предыдущий день">
                 <ChevronLeft size={14} />
               </button>
-              <button type="button" className="btn border-paper/40 text-paper" onClick={toggle}>
+              <button type="button" className="btn border-paper/40 bg-transparent text-paper shadow-none hover:bg-white/10" onClick={toggle}>
                 {playing ? <Pause size={14} /> : <Play size={14} />}
               </button>
-              <button type="button" className="btn border-paper/40 text-paper" onClick={toggleVoice} aria-label="Голос">
+              <button type="button" className="btn border-paper/40 bg-transparent text-paper shadow-none hover:bg-white/10" onClick={toggleVoice} aria-label="Голос">
                 {voicePlaying ? <VolumeX size={14} /> : <Volume2 size={14} />}
               </button>
-              <button type="button" className="btn border-paper/40 text-paper" onClick={() => go(next)} disabled={!next} aria-label="Следующий день">
+              <button type="button" className="btn border-paper/40 bg-transparent text-paper shadow-none hover:bg-white/10" onClick={() => go(next)} disabled={!next} aria-label="Следующий день">
                 <ChevronRight size={14} />
               </button>
-              <button type="button" className="btn border-paper/40 text-paper" onClick={exitKino} aria-label="Выйти из кинорежима">
+              <button type="button" className="btn border-paper/40 bg-transparent text-paper shadow-none hover:bg-white/10" onClick={exitKino} aria-label="Выйти из кинорежима">
                 <X size={14} />
               </button>
               <div className="ml-4 hidden sm:block">
@@ -397,15 +412,12 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
             </div>
           ) : (
             <>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
               <button type="button" className="btn btn-solid" onClick={toggle} disabled={busy === 'video'}>
                 {playing ? <Pause size={14} /> : <Play size={14} />} {playing ? 'Пауза' : 'Прожить день'}
               </button>
               <button type="button" className="btn" onClick={restart} aria-label="С начала" disabled={busy === 'video'}>
                 <RotateCcw size={14} />
-              </button>
-              <button type="button" className="btn" onClick={toggleVoice}>
-                {voicePlaying ? <VolumeX size={14} /> : <Volume2 size={14} />} {voicePlaying ? 'Тише' : 'Послушать'}
               </button>
               <a href={`#/day/${day.id}/kino`} className="btn">
                 <Clapperboard size={14} /> Кино
@@ -414,7 +426,7 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
                 <Columns2 size={14} />
               </a>
             </div>
-            <div className="mt-4">
+            <div className="mt-5 flex justify-center">
               <LiveMeter clock={clock} style={view.style} />
             </div>
             </>
@@ -422,54 +434,65 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
         </div>
       </div>
 
-      <div className="min-w-0">
-        <div className="flex items-start gap-3">
-          <Folder size={20} className="mt-1.5 shrink-0" />
-          <div className="min-w-0 flex-1">
-            {editing ? (
-              <input
-                autoFocus
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onBlur={saveTitle}
-                onKeyDown={(e) => e.key === 'Enter' && saveTitle()}
-                className="w-full border-b border-ink bg-transparent font-serif text-3xl leading-tight outline-none sm:text-4xl"
-              />
-            ) : (
-              <h1 className="group font-serif text-3xl leading-tight sm:text-4xl">
-                {day.title}
-                <button type="button" onClick={() => setEditing(true)} className="ml-2 align-middle text-ink-soft opacity-0 transition group-hover:opacity-100 focus:opacity-100" aria-label="Переименовать папку">
-                  <Pencil size={16} />
-                </button>
-              </h1>
-            )}
-            <div className="label mt-1">
-              <a href={`#/calendar/${day.date.slice(0, 7)}`} className="hover:text-ink hover:underline" title="Открыть месяц в календаре">
-                {date.long}
-              </a>{' '}
-              · {date.weekday} · страница № {number}
-            </div>
-          </div>
+      <div className="spine lined min-w-0 pt-1 pb-4 pl-8 sm:pl-10 lg:pl-14">
+        <a href={`#/calendar/${day.date.slice(0, 7)}`} className="stamp absolute top-0 right-0 z-[1] scale-[.82] hover:bg-blue/5 sm:scale-100" title="Открыть месяц в календаре">
+          <span>
+            {stampDate}
+            <b>{day.date.slice(0, 4)}</b>
+            {date.weekday}
+          </span>
+        </a>
+        <div className="pr-28 font-hand text-2xl text-ink-soft">страница № {number}</div>
+        {editing ? (
+          <input
+            autoFocus
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onBlur={saveTitle}
+            onKeyDown={(e) => e.key === 'Enter' && saveTitle()}
+            className="w-full border-b-2 border-dashed border-blue bg-transparent pr-28 font-hand text-5xl leading-tight font-bold text-blue outline-none"
+          />
+        ) : (
+          <h1 className="group pr-28 font-hand text-5xl leading-[0.95] font-bold text-blue sm:text-6xl">
+            {day.title}
+            <button type="button" onClick={() => setEditing(true)} className="ml-2 align-middle text-ink-soft opacity-0 transition group-hover:opacity-100 focus:opacity-100" aria-label="Переименовать папку">
+              <Pencil size={18} />
+            </button>
+          </h1>
+        )}
+
+        <p className="mt-6 max-w-2xl text-[19px] leading-[32px] whitespace-pre-line">{day.text}</p>
+
+        <div className="mt-10 grid gap-8 xl:grid-cols-[1.45fr_1fr] xl:items-start">
+          <SongPlayer day={day} excerptUrl={excerptUrl} onMedia={onMedia} />
+          <VoiceNote playing={voicePlaying} onToggle={toggleVoice} label={day.style.voice.label} remark={day.style.voice.style} />
         </div>
 
-        <p className="mt-6 max-w-2xl font-serif text-xl leading-relaxed whitespace-pre-line">{day.text}</p>
+        <div className="mt-12">
+          <WhyPanel
+            day={view}
+            tuning={{
+              base,
+              onAxis,
+              dirty,
+              overridden: Boolean(day.axesOverride && Object.keys(day.axesOverride).length),
+              saving: busy === 'tune',
+              onSave: () => retune(override),
+              onReset: () => retune({}),
+              onRevert: () => setOverride(day.axesOverride ?? {}),
+            }}
+            feel={{ value: feel, busy: feelBusy, onCompute: () => void computeFeelNow(), onAxis: onFeelAxis, onReset: resetFeel }}
+          />
+        </div>
 
-        <div className="mt-8 grid gap-8 xl:grid-cols-2">
-          <div className="space-y-8">
-            <SongPlayer day={day} excerptUrl={excerptUrl} onMedia={onMedia} />
+        <div className="mt-12 space-y-8">
             <div>
-              <div className="label">голос записи</div>
-              <p className="mt-1 text-sm" title={`«${day.style.voice.style}»`}>
-                {day.style.voice.label}
-              </p>
-            </div>
-            <div>
-              <div className="label">папка дня</div>
-              <div className="mt-1 font-mono text-sm" title={files.join('\n')}>
-                📁 {day.folder} <span className="text-ink-soft">· {files.length} файлов</span>
+              <div className="font-hand text-3xl font-bold">папка дня</div>
+              <div className="mt-1 flex items-center gap-2 font-mono text-sm" title={files.join('\n')}>
+                <Folder size={16} className="shrink-0 text-blue" /> {day.folder} <span className="text-ink-soft">· {files.length} файлов</span>
               </div>
               {videoUrl && <video src={videoUrl} controls className="mt-3 w-40 border border-line" />}
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
                   className="btn"
@@ -497,37 +520,52 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
               )}
             </div>
             {(prev || next) && (
-              <div className="flex justify-between gap-4 border-t border-line pt-4 text-sm">
+              <div className="flex justify-between gap-4 border-t-2 border-dashed border-line pt-4 font-hand text-2xl">
                 {prev ? (
-                  <a href={`#/day/${prev.id}`} className="hover:underline">
+                  <a href={`#/day/${prev.id}`} className="text-blue hover:underline">
                     ← {prev.title}
                   </a>
                 ) : (
                   <span />
                 )}
                 {next && (
-                  <a href={`#/day/${next.id}`} className="text-right hover:underline">
+                  <a href={`#/day/${next.id}`} className="text-right text-blue hover:underline">
                     {next.title} →
                   </a>
                 )}
               </div>
             )}
-          </div>
-          <WhyPanel
-            day={view}
-            tuning={{
-              base,
-              onAxis,
-              dirty,
-              overridden: Boolean(day.axesOverride && Object.keys(day.axesOverride).length),
-              saving: busy === 'tune',
-              onSave: () => retune(override),
-              onReset: () => retune({}),
-              onRevert: () => setOverride(day.axesOverride ?? {}),
-            }}
-            feel={{ value: feel, busy: feelBusy, onCompute: () => void computeFeelNow(), onAxis: onFeelAxis, onReset: resetFeel }}
-          />
         </div>
+      </div>
+    </div>
+  );
+}
+
+const WAVE = Array.from({ length: 30 }, (_, i) => Math.round(22 + Math.abs(Math.sin(i * 1.7) * Math.cos(i * 0.6)) * 72));
+
+/** Голос записи — как голосовая заметка, приклеенная к странице. */
+function VoiceNote({ playing, onToggle, label, remark }: { playing: boolean; onToggle: () => void; label: string; remark: string }) {
+  return (
+    <div className="relative mt-3 -rotate-[1.2deg] bg-white px-4 pt-3 pb-2 shadow-[0_8px_14px_-6px_rgba(0,0,0,.25)]">
+      <span className="tape tape-pink -top-3 left-1/3 h-6 w-20 rotate-3" />
+      <div className="label">голос записи</div>
+      <div className="mt-2 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={playing ? 'Остановить голос' : 'Послушать запись'}
+          className="grid h-10 w-10 flex-none place-items-center rounded-full border-2 border-blue text-blue transition hover:bg-blue hover:text-white"
+        >
+          {playing ? <Pause size={16} /> : <Play size={16} className="translate-x-px" />}
+        </button>
+        <div className="flex h-8 flex-1 items-center gap-[2px]" aria-hidden>
+          {WAVE.map((h, i) => (
+            <i key={i} className={`flex-1 rounded-sm bg-blue/70 ${playing ? 'animate-pulse' : ''}`} style={{ height: `${h}%`, animationDelay: `${(i % 7) * 90}ms` }} />
+          ))}
+        </div>
+      </div>
+      <div className="mt-1 font-hand text-[22px] text-ink-soft" title={`«${remark}»`}>
+        {label}
       </div>
     </div>
   );

@@ -107,7 +107,7 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
   return (
     <div className="grid gap-12 lg:grid-cols-[1fr_380px]">
       <section>
-        <h1 className="font-serif text-3xl">
+        <h1 className="font-hand text-5xl leading-none font-bold text-blue">
           {date === localToday() ? 'Как прошёл день?' : `Как прошло ${new Date(date + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}?`}
         </h1>
         <p className="mt-2 max-w-2xl text-ink-soft">Как рассказали бы другу: свет, звуки, кто был рядом.</p>
@@ -122,7 +122,7 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
             onChange={(e) => setText(e.target.value)}
             rows={9}
             placeholder="Гуляли по парку, всё в жёлтых листьях. Было холодно, но мы пили какао из термоса и долго разговаривали…"
-            className="mt-3 w-full resize-y border border-line bg-paper-2/40 p-4 font-serif text-xl leading-relaxed outline-none focus:border-ink"
+            className="lined mt-3 w-full resize-y bg-white/50 py-[6px] pr-4 pl-6 text-[19px] leading-[32px] shadow-[inset_0_0_0_1px_var(--color-line)] outline-none focus:shadow-[inset_0_0_0_2px_var(--color-blue)]"
           />
           <div className="label mt-1 text-right">{text.trim().length < 20 ? `ещё ${20 - text.trim().length} символов` : `${text.trim().split(/\s+/).length} слов`}</div>
         </div>
@@ -138,8 +138,9 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
             }}
           >
             {previews.map((src, i) => (
-              <div key={src} className="group relative aspect-square overflow-hidden bg-paper-2">
+              <div key={src} className="group polaroid relative aspect-square p-1.5 pb-5 odd:-rotate-2 even:rotate-2">
                 <img src={src} alt="" className="h-full w-full object-cover" />
+                <span className="tape -top-2 left-1/2 h-4 w-12 -translate-x-1/2 -rotate-3" />
                 <button
                   type="button"
                   aria-label="Убрать фото"
@@ -231,7 +232,7 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
 
       <aside className="lg:sticky lg:top-8 lg:self-start">
         {steps.length === 0 ? (
-          <ul className="space-y-2 text-sm text-ink-soft">
+          <ul className="note space-y-1 text-[22px]">
             <li>фото → палитра</li>
             <li>песня → ритм</li>
             <li>текст → настроение</li>

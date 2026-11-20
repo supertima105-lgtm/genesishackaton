@@ -28,38 +28,38 @@ export function App() {
   const newMatch = route.match(/^\/new(?:\?date=(\d{4}-\d{2}-\d{2}))?$/);
   if (route === '/show') return <ShowPage />;
 
+  const tab = (on: boolean, extra = '') =>
+    `rounded-sm px-3 pt-1 pb-1.5 font-hand text-[21px] leading-none shadow-[0_2px_0_rgba(0,0,0,.08)] transition-transform hover:-translate-y-0.5 odd:-rotate-[1.5deg] even:rotate-[1.2deg] ${on ? 'bg-note' : 'bg-paper'} ${extra}`;
+
   return (
-    <div className="min-h-screen">
-      <header className="mx-auto flex max-w-7xl items-end justify-between gap-6 px-4 pt-8 pb-6 sm:px-8">
-        <a href="#/" className="group">
-          <div className="font-serif text-4xl leading-none tracking-tight">Атмосфера</div>
-          <div className="label mt-2">дневник, который помнит, как ощущался день</div>
+    <div className="min-h-screen px-2 pb-12 sm:px-6">
+      <header className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-2 pt-6 pb-5 sm:px-2">
+        <a href="#/" className="block -rotate-2">
+          <div className="font-hand text-5xl leading-none font-bold text-blue">Атмосфера</div>
+          <div className="mt-1 rotate-1 font-mono text-[11px] text-ink-soft">дневник, который помнит, как ощущался день</div>
         </a>
-        <nav className="flex items-center gap-2 sm:gap-3">
-          <a href="#/" className={`label px-2 py-1 ${route === '/' ? 'text-ink underline underline-offset-4' : ''}`}>
-            Архив
+        <nav className="flex flex-wrap items-center gap-2">
+          <a href="#/" className={tab(route === '/')}>
+            архив
           </a>
-          <a href="#/calendar" className={`label px-2 py-1 ${calMatch ? 'text-ink underline underline-offset-4' : ''}`}>
-            Календарь
+          <a href="#/calendar" className={tab(Boolean(calMatch))}>
+            календарь
           </a>
-          <a href="#/compare" className={`label hidden px-2 py-1 md:inline ${cmpMatch ? 'text-ink underline underline-offset-4' : ''}`}>
-            Сравнить
+          <a href="#/compare" className={tab(Boolean(cmpMatch), 'hidden md:inline-block')}>
+            сравнить
           </a>
-          <a href="#/show" className="label hidden px-2 py-1 md:inline">
-            Показ
+          <a href="#/show" className={tab(false, 'hidden md:inline-block')}>
+            показ
           </a>
-          <a href="#/system" className={`label hidden px-2 py-1 sm:inline ${route === '/system' ? 'text-ink underline underline-offset-4' : ''}`}>
-            Система
+          <a href="#/system" className={tab(route === '/system', 'hidden sm:inline-block')}>
+            как это работает
           </a>
-          <a href="#/new" className="btn btn-solid">
-            + День
+          <a href="#/new" className="rounded-sm bg-blue px-3 pt-1 pb-1.5 font-hand text-[21px] leading-none text-white shadow-[0_2px_0_rgba(0,0,0,.12)] transition-transform hover:-translate-y-0.5">
+            + новый день
           </a>
         </nav>
       </header>
-      <div className="mx-auto max-w-7xl px-4 sm:px-8">
-        <div className="h-px bg-line" />
-      </div>
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-8">
+      <main className="sheet mx-auto max-w-7xl px-4 py-8 sm:px-8">
         {newMatch ? (
           <NewDay key={route} initialDate={newMatch[1]} />
         ) : calMatch ? (

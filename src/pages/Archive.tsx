@@ -1,5 +1,5 @@
 import { Clapperboard, Columns2, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { formatDate, MemoryCard } from '../components/memory/MemoryCard';
 import { YearStrip } from '../components/YearStrip';
 import { exportExamples, importExamples } from '../lib/examples';
@@ -34,7 +34,7 @@ export function Archive() {
   if (days.length === 0)
     return (
       <section className="mx-auto max-w-xl py-16 text-center">
-        <p className="font-serif text-3xl leading-tight">Дневник пока пуст.</p>
+        <p className="font-hand text-5xl leading-tight font-bold text-blue">Дневник пока пуст</p>
         <p className="mt-4 text-ink-soft">
           Начните с любимого дня: текст, фото и та самая песня.
         </p>
@@ -52,7 +52,7 @@ export function Archive() {
     <section>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-serif text-3xl">Архив дней</h1>
+          <h1 className="font-hand text-5xl leading-none font-bold text-blue">Архив дней</h1>
           <p className="label mt-1">
             {days.length} {plural(days.length, 'страница', 'страницы', 'страниц')} · хранилище: {store.kind === 'supabase' ? 'Supabase' : 'этот браузер'}
           </p>
@@ -80,10 +80,10 @@ export function Archive() {
 
       {groups.map(([month, list]) => (
         <div key={month} className="mb-12">
-          <h2 className="label mb-4">{month}</h2>
-          <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 xl:grid-cols-4">
-            {list.map((d) => (
-              <ArchiveCard key={d.id} day={d} number={numbers.get(d.id) ?? 0} />
+          <h2 className="mb-6 font-hand text-3xl font-bold text-ink-soft">{month}</h2>
+          <div className="grid grid-cols-2 gap-x-5 gap-y-9 sm:gap-x-8 md:grid-cols-3 xl:grid-cols-4">
+            {list.map((d, i) => (
+              <ArchiveCard key={d.id} day={d} number={numbers.get(d.id) ?? 0} index={i} />
             ))}
           </div>
         </div>
@@ -94,17 +94,23 @@ export function Archive() {
   );
 }
 
-function ArchiveCard({ day, number }: { day: DayRecord; number: number }) {
+const TILTS = [-2.4, 1.8, -1.2, 2.2, -1.8, 1.1];
+
+/** День в архиве — полароид на кнопке, у каждого свой наклон. */
+function ArchiveCard({ day, number, index }: { day: DayRecord; number: number; index: number }) {
   const cover = useFileUrls(day.cover ? [day.cover] : undefined);
   const first = useFileUrls(day.photos.slice(0, 1));
   return (
     <a href={`#/day/${encodeURIComponent(day.id)}`} className="group block">
-      <div className="transition-transform duration-300 group-hover:-translate-y-1 group-hover:shadow-[0_12px_30px_-12px_rgba(0,0,0,.35)]">
+      <div
+        className="polaroid pin rotate-(--tilt) pb-3 transition-transform duration-300 group-hover:-translate-y-1 group-hover:rotate-0"
+        style={{ '--tilt': `${TILTS[index % TILTS.length]}deg` } as CSSProperties}
+      >
         <MemoryCard day={day} number={number} photoUrls={first ?? []} coverUrl={cover?.[0]} />
-      </div>
-      <div className="mt-2 flex items-baseline justify-between gap-2">
-        <span className="truncate font-serif text-lg leading-tight">{day.title}</span>
-        <span className="label shrink-0">{formatDate(day.date).short}</span>
+        <div className="mt-2 flex items-baseline justify-between gap-2">
+          <span className="truncate font-hand text-[22px] leading-tight">{day.title}</span>
+          <span className="label shrink-0">{formatDate(day.date).short}</span>
+        </div>
       </div>
     </a>
   );
@@ -184,8 +190,9 @@ function OnThisDay({ days, numbers }: { days: DayRecord[]; numbers: Map<string, 
   const ago = year - Number(day.date.slice(0, 4));
   const agoText = ago === 1 ? 'Год назад' : `${ago} ${plural(ago, 'год', 'года', 'лет')} назад`;
   return (
-    <section className="mb-10 grid items-center gap-5 border border-line bg-paper-2/50 p-4 sm:grid-cols-[150px_1fr] sm:p-5">
-      <a href={`#/day/${day.id}`} className="block w-36 sm:w-auto">
+    <section className="relative mb-12 grid -rotate-[0.4deg] items-center gap-6 bg-note/60 p-5 shadow-[0_10px_20px_-10px_rgba(0,0,0,.25)] sm:grid-cols-[150px_1fr] sm:p-6">
+      <span className="tape -top-3 left-1/2 -translate-x-1/2 rotate-2" />
+      <a href={`#/day/${day.id}`} className="polaroid block w-36 -rotate-3 pb-5 sm:w-auto">
         <MemoryCard day={day} number={numbers.get(day.id) ?? 0} photoUrls={first ?? []} coverUrl={cover?.[0]} />
       </a>
       <div className="min-w-0">
@@ -193,8 +200,8 @@ function OnThisDay({ days, numbers }: { days: DayRecord[]; numbers: Map<string, 
           {agoText}
           {exact.length ? ' в этот день' : ', примерно в эти дни'} · {formatDate(day.date).long}
         </div>
-        <h2 className="mt-2 font-serif text-3xl leading-tight">{day.title}</h2>
-        <p className="mt-2 font-serif text-lg text-ink-soft italic">{day.signals.text.caption}</p>
+        <h2 className="mt-2 font-hand text-4xl leading-none font-bold text-blue">{day.title}</h2>
+        <p className="mt-2 text-lg text-ink-soft italic">{day.signals.text.caption}</p>
         <p className="mt-2 line-clamp-2 max-w-2xl text-sm text-ink-soft">{day.text}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           <a href={`#/day/${day.id}/kino`} className="btn btn-solid">

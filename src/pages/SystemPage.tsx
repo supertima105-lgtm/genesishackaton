@@ -34,7 +34,7 @@ const MUSIC = [
 export function SystemPage() {
   return (
     <article className="max-w-5xl">
-      <h1 className="font-serif text-4xl">Визуальная система дневника</h1>
+      <h1 className="font-hand text-5xl leading-none font-bold text-blue">Визуальная система дневника</h1>
       <p className="mt-3 max-w-3xl text-lg text-ink-soft">
         Текст, фото и песня переводятся в семь осей настроения: напряжение, радость, тепло, ностальгия, люди, природа, темп.
         Оси выбирают художественный режим и непрерывно подкручивают его параметры. Поэтому два дня в одном режиме всё равно

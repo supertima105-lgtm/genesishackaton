@@ -76,7 +76,7 @@ export function ComparePage({ a, b }: { a?: string; b?: string }) {
 
   return (
     <section>
-      <h1 className="font-serif text-3xl">Один дневник — два настроения</h1>
+      <h1 className="font-hand text-5xl leading-none font-bold text-blue">Один дневник — два настроения</h1>
 
       <div className="mt-8 grid gap-8 md:grid-cols-2">
         {([A, B] as const).map((d, side) => (

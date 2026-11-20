@@ -85,7 +85,7 @@ export function ShowPage() {
       {days && phase === 'intro' && (
         <div className="mx-auto flex h-full max-w-5xl flex-col justify-center px-6">
           <div className="font-mono text-[11px] tracking-[0.14em] uppercase opacity-60">показ · атмосфера</div>
-          <h1 className="mt-3 font-serif text-5xl leading-tight">
+          <h1 className="mt-3 font-display text-5xl leading-tight">
             Один дневник — {list.length} {plural(list.length, 'настроение', 'настроения', 'настроений')}
           </h1>
           {list.length === 0 ? (
@@ -176,7 +176,7 @@ export function ShowPage() {
 
       {phase === 'end' && (
         <motion.div className="mx-auto flex h-full max-w-6xl flex-col justify-center px-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }}>
-          <h2 className="font-serif text-5xl leading-tight">
+          <h2 className="font-display text-5xl leading-tight">
             Один дневник. {list.length} {plural(list.length, 'день', 'разных дня', 'разных дней')}.
           </h2>
           <p className="mt-3 max-w-2xl text-lg opacity-75">
@@ -213,7 +213,7 @@ function Thumb({ day, number, index, withMode }: { day: DayRecord; number: numbe
       <div className="mt-2 font-mono text-[10px] tracking-wider uppercase opacity-55">
         {index + 1} · {withMode ? MODES[day.style.mode].name : formatDate(day.date).short}
       </div>
-      <div className="mt-0.5 truncate font-serif text-base leading-tight">{day.title}</div>
+      <div className="mt-0.5 truncate font-display text-base leading-tight">{day.title}</div>
     </div>
   );
 }
@@ -327,10 +327,10 @@ function Slide({ day, number, index, total, withVoice, paused, onProgress, onDon
         <div className="font-mono text-[11px] tracking-[0.14em] uppercase opacity-55">
           день {index + 1} из {total} · {formatDate(day.date).long}
         </div>
-        <h2 className="mt-3 font-serif text-4xl leading-tight">{day.title}</h2>
-        <p className="mt-3 font-serif text-xl italic opacity-75">{day.signals.text.caption}</p>
+        <h2 className="mt-3 font-display text-4xl leading-tight">{day.title}</h2>
+        <p className="mt-3 font-display text-xl italic opacity-75">{day.signals.text.caption}</p>
         <div className="mt-8 border-l-2 pl-4" style={{ borderColor: day.style.palette.accent }}>
-          <div className="font-serif text-2xl">{mode.name}</div>
+          <div className="font-display text-2xl">{mode.name}</div>
           <div className="mt-1 font-mono text-[10px] tracking-wider uppercase opacity-55">{mode.reference}</div>
           <p className="mt-2 text-sm leading-relaxed opacity-80">{mode.why}</p>
         </div>

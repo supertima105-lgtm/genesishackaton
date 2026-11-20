@@ -342,7 +342,7 @@ function Header({
         <a href={prev} className="btn px-2.5" aria-label="Назад">
           <ChevronLeft size={14} />
         </a>
-        <h1 className="min-w-[9ch] text-center font-serif text-3xl sm:text-4xl">{title}</h1>
+        <h1 className="min-w-[9ch] text-center font-hand text-4xl font-bold text-blue sm:text-5xl">{title}</h1>
         <a href={next} className="btn px-2.5" aria-label="Вперёд">
           <ChevronRight size={14} />
         </a>

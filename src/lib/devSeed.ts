@@ -170,7 +170,7 @@ export async function seedDemo() {
       photos: [await photo(autumn, 3, 'a1.jpg'), await photo(autumn, 7, 'a2.jpg'), await photo(autumn, 11, 'a3.jpg')],
       artist: 'Frank Sinatra',
       title: 'Autumn in New York',
-      link: 'https://open.spotify.com/track/0Bp1cgsS8DHEJyR6vQCuXq',
+      link: 'https://music.yandex.ru/album/156125/track/33773819',
     },
     {
       date: '2026-10-28',
