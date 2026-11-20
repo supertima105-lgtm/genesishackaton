@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import type { DayRecord } from '../lib/types';
 
@@ -6,13 +6,12 @@ interface Props {
   day: DayRecord;
   excerptUrl?: string;
   onMedia: (el: HTMLMediaElement | null) => void;
+  /** день «проживается» — пластинка выезжает из конверта и крутится */
+  playing?: boolean;
 }
 
-const BARCODE =
-  'repeating-linear-gradient(90deg, #2b2620 0 2px, transparent 2px 4px, #2b2620 4px 5px, transparent 5px 8px, #2b2620 8px 11px, transparent 11px 12px)';
-
-/** Фрагмент песни с волной (wavesurfer) или официальный плеер сервиса по ссылке. */
-export function SongPlayer({ day, excerptUrl, onMedia }: Props) {
+/** Пластинка дня и под ней — фрагмент песни с волной (wavesurfer) или официальный плеер сервиса по ссылке. */
+export function SongPlayer({ day, excerptUrl, onMedia, playing = false }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const { ink, accent } = day.style.palette;
 
@@ -46,40 +45,47 @@ export function SongPlayer({ day, excerptUrl, onMedia }: Props) {
   const height = day.song.link?.provider === 'spotify' ? 152 : day.song.link?.provider === 'youtube' ? 200 : 120;
 
   const showEmbed = !excerptUrl && embed;
+  const era = day.signals.music.era;
 
-  // билет на песню дня: корешок с темпом, штрихкод
+  // пластинка дня: винил выглядывает из бумажного конверта и выезжает, когда день играет
   return (
-    <div className="mt-3 grid rotate-[1.2deg] grid-cols-[1fr_44px] drop-shadow-[0_8px_8px_rgba(0,0,0,.14)]">
-      <div className="min-w-0 rounded-l-lg bg-[#f3e1b8] px-4 pt-3 pb-3">
-        <div className="label">песня дня · admit one</div>
-        {/* у встроенного плеера своё название и исполнитель — не дублируем */}
-        {!showEmbed && (
-          <>
-            <div className="mt-1 font-hand text-[32px] leading-none font-bold">{day.song.title}</div>
-            <div className="mt-1 font-mono text-xs">{day.song.artist}</div>
-          </>
-        )}
-        {excerptUrl && <div ref={box} className="mt-3" />}
-        {showEmbed && (
-          <iframe
-            title="Песня дня"
-            src={embed}
-            height={height}
-            className="mt-2 w-full rounded-xl border-0"
-            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            loading="lazy"
-          />
-        )}
-        {!excerptUrl && !embed && day.song.link?.url && (
-          <a href={day.song.link.url} target="_blank" rel="noreferrer" className="mt-2 inline-block font-hand text-xl text-blue underline underline-offset-4">
-            открыть песню
-          </a>
-        )}
-        <div className="mt-3 h-6 w-2/3" style={{ background: BARCODE }} aria-hidden />
+    <div>
+      <div className="label">пластинка дня</div>
+      <div className="relative mt-3 aspect-[340/178] w-full max-w-[340px]">
+        <div
+          className={`absolute top-[5.1%] left-[20%] aspect-square w-[47%] transition-transform duration-700 ease-out ${playing ? 'translate-x-[70%]' : 'translate-x-[38%]'}`}
+          aria-hidden
+        >
+          <div className={`vinyl h-full w-full ${playing ? 'spinning' : ''}`} style={{ '--label': accent } as CSSProperties}>
+            <span className="absolute top-[38%] left-1/2 -translate-x-1/2 font-mono text-[9px] tracking-widest text-white/80 mix-blend-difference">33⅓</span>
+          </div>
+          <div className="vinyl-sheen" />
+        </div>
+        <div className="sleeve absolute top-0 left-0 z-10 flex aspect-square w-[52%] -rotate-2 flex-col justify-end p-[7%]">
+          <div className="absolute top-[7%] right-[8%] font-mono text-[10px] text-ink-soft">
+            ♪ {Math.round(day.style.motion.bpm)}
+            {era ? ` · ’${String(era).slice(-2)}` : ''}
+          </div>
+          <div className="line-clamp-3 font-hand text-[clamp(22px,7vw,30px)] leading-[0.95] font-bold">{day.song.title}</div>
+          <div className="mt-1 truncate font-mono text-[11px]">{day.song.artist}</div>
+        </div>
       </div>
-      <div className="grid place-items-center rounded-r-lg border-l-2 border-dashed border-ink/25 bg-[#ecd3a0] font-mono text-[11px] tracking-[.2em] [writing-mode:vertical-rl]">
-        ♪ {Math.round(day.style.motion.bpm)} BPM
-      </div>
+      {excerptUrl && <div ref={box} className="mt-4" />}
+      {showEmbed && (
+        <iframe
+          title="Песня дня"
+          src={embed}
+          height={height}
+          className="mt-4 w-full rounded-xl border-0"
+          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+          loading="lazy"
+        />
+      )}
+      {!excerptUrl && !embed && day.song.link?.url && (
+        <a href={day.song.link.url} target="_blank" rel="noreferrer" className="mt-3 inline-block font-hand text-xl text-blue underline underline-offset-4">
+          открыть песню
+        </a>
+      )}
     </div>
   );
 }

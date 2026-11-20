@@ -37,7 +37,7 @@ const overrideKey = (o: Partial<Axes>) =>
       .sort()
       .map((k) => [k, Math.round((o[k as keyof Axes] as number) * 100)]),
   );
-import { numberDays, useFileUrls } from '../lib/useDays';
+import { localToday, numberDays, plural, useFileUrls } from '../lib/useDays';
 import { recordMemory, videoMime } from '../lib/video';
 
 export function DayPage({ id, kino }: { id: string; kino: boolean }) {
@@ -442,7 +442,10 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
             {date.weekday}
           </span>
         </a>
-        <div className="pr-28 font-hand text-2xl text-ink-soft">страница № {number}</div>
+        <span className="stain right-6 bottom-24 hidden sm:block" aria-hidden />
+        <div className="pr-28 font-hand text-2xl text-ink-soft">
+          страница № {number} · {agoText(day.date)}
+        </div>
         {editing ? (
           <input
             autoFocus
@@ -462,9 +465,10 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
         )}
 
         <p className="mt-6 max-w-2xl text-[19px] leading-[32px] whitespace-pre-line">{day.text}</p>
+        {day.signals.text.caption && <div className="note mt-6 max-w-full">{day.signals.text.caption}</div>}
 
         <div className="mt-10 grid gap-8 xl:grid-cols-[1.45fr_1fr] xl:items-start">
-          <SongPlayer day={day} excerptUrl={excerptUrl} onMedia={onMedia} />
+          <SongPlayer day={day} excerptUrl={excerptUrl} onMedia={onMedia} playing={playing} />
           <VoiceNote playing={voicePlaying} onToggle={toggleVoice} label={day.style.voice.label} remark={day.style.voice.style} />
         </div>
 
@@ -539,6 +543,24 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
       </div>
     </div>
   );
+}
+
+/** «Это было …» — сколько времени прошло с того дня. */
+function agoText(iso: string): string {
+  const days = Math.round((Date.parse(localToday() + 'T12:00:00') - Date.parse(iso + 'T12:00:00')) / 864e5);
+  if (days <= 0) return 'это сегодня';
+  if (days === 1) return 'это было вчера';
+  if (days < 7) return `это было ${days} ${plural(days, 'день', 'дня', 'дней')} назад`;
+  if (days < 30) {
+    const w = Math.round(days / 7);
+    return w === 1 ? 'это было неделю назад' : `это было ${w} ${plural(w, 'неделю', 'недели', 'недель')} назад`;
+  }
+  if (days < 365) {
+    const m = Math.round(days / 30.4);
+    return m === 1 ? 'это было месяц назад' : `это было ${m} ${plural(m, 'месяц', 'месяца', 'месяцев')} назад`;
+  }
+  const y = Math.floor(days / 365);
+  return y === 1 ? 'это было год назад' : `это было ${y} ${plural(y, 'год', 'года', 'лет')} назад`;
 }
 
 const WAVE = Array.from({ length: 30 }, (_, i) => Math.round(22 + Math.abs(Math.sin(i * 1.7) * Math.cos(i * 0.6)) * 72));

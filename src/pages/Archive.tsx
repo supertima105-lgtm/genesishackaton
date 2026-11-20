@@ -52,7 +52,7 @@ export function Archive() {
     <section>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-hand text-5xl leading-none font-bold text-blue">Архив дней</h1>
+          <h1 className="font-hand text-5xl leading-none font-bold text-blue">Былые дни</h1>
           <p className="label mt-1">
             {days.length} {plural(days.length, 'страница', 'страницы', 'страниц')} · хранилище: {store.kind === 'supabase' ? 'Supabase' : 'этот браузер'}
           </p>
