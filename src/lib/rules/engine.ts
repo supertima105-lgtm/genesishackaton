@@ -8,7 +8,6 @@ import type {
   ShaderParams,
   StyleParams,
   TextSignals,
-  VoiceChoice,
   WeatherSignals,
 } from '../types';
 import { AXIS_WEIGHTS, MODES, MODE_LIST } from './modes';
@@ -213,14 +212,6 @@ export function buildStyle(
     effect: `кадр меняется каждые ${beatsPerShot} долей (${shotSeconds.toFixed(1)} с), переход «${TRANSITION_RU[mo.transition]}», сила пульса ${f2(mo.pulse)}`,
   });
 
-  // ── 6. Голос ─────────────────────────────────────────────────────
-  const voice = chooseVoice(axes);
-  reasons.push({
-    source: 'система',
-    cause: `напряжение ${f2(axes.tension)}, валентность ${f2(axes.valence)}, ностальгия ${f2(axes.nostalgia)}`,
-    effect: `голос озвучки — ${voice.label} (${voice.name})`,
-  });
-
   const style: StyleParams = {
     mode: primary.id,
     secondary: secondary.id,
@@ -231,7 +222,6 @@ export function buildStyle(
     layout: { frame: primary.frame },
     type: { caption: primary.caption },
     shapes: { kind: primary.shapes, count: primary.shapeCount, seed: hashString(seedKey) },
-    voice,
     weather,
   };
   return { axes, style, reasons };
@@ -272,20 +262,3 @@ function buildPalette(p: PhotoSignals, axes: Axes, t: TextSignals, mode: ModeId)
   return { paper, ink, accent, shades, dark };
 }
 
-function chooseVoice(a: Axes): VoiceChoice {
-  if (a.nostalgia > 0.68)
-    return { name: 'Gacrux', label: 'зрелый, задумчивый', style: 'Прочитай задумчиво и тепло, как старое письмо, которое нашёл в ящике стола', rate: 0.9, pitch: 0.92 };
-  if (a.valence > 0.3 && a.pace > 0.55)
-    return { name: 'Sadachbia', label: 'живой, с улыбкой', style: 'Прочитай живо и с улыбкой, в быстром темпе, будто ещё не отошёл от этого дня', rate: 1.12, pitch: 1.06 };
-  if (a.tension >= 0.5 && a.valence <= 0.3)
-    return { name: 'Kore', label: 'собранный, ровный', style: 'Прочитай собранно и ровно, чуть быстрее обычного, коротко выдыхая между фразами, как человек после бессонной ночи', rate: 1.06, pitch: 0.95 };
-  if (a.tension < 0.45 && a.valence < 0)
-    return { name: 'Achernar', label: 'мягкий, почти шёпот', style: 'Прочитай очень тихо и медленно, с длинными паузами, почти шёпотом', rate: 0.82, pitch: 0.9 };
-  if (a.tension < 0.45 && a.temperature >= 0.5)
-    return { name: 'Sulafat', label: 'тёплый, неторопливый', style: 'Прочитай тихо, тепло и неторопливо, будто рассказываешь этот день близкому человеку', rate: 0.9, pitch: 0.97 };
-  if (a.tension < 0.45)
-    return { name: 'Vindemiatrix', label: 'бережный, прозрачный', style: 'Прочитай спокойно и ясно, бережно, без спешки', rate: 0.94, pitch: 1 };
-  if (a.valence > 0.3)
-    return { name: 'Sadachbia', label: 'живой, с улыбкой', style: 'Прочитай живо и с улыбкой, в быстром темпе, будто ещё не отошёл от этого дня', rate: 1.12, pitch: 1.06 };
-  return { name: 'Kore', label: 'собранный, ровный', style: 'Прочитай собранно и ровно, чуть быстрее обычного, коротко выдыхая между фразами, как человек после бессонной ночи', rate: 1.06, pitch: 0.95 };
-}

@@ -160,16 +160,7 @@ export interface StyleParams {
     count: number;
     seed: number;
   };
-  voice: VoiceChoice;
   weather?: { kind: WeatherSignals['kind']; intensity: number };
-}
-
-export interface VoiceChoice {
-  name: string; // голос Gemini TTS
-  label: string;
-  style: string; // режиссёрская ремарка для TTS
-  rate: number; // для запасного голоса браузера
-  pitch: number;
 }
 
 export interface Reason {
@@ -193,6 +184,7 @@ export interface DayRecord {
   photos: FileRef[];
   song: SongInfo;
   songFile?: FileRef;
+  /** Устарело: озвучка убрана. Поле остаётся, чтобы при удалении старого дня стёрся и его файл. */
   voice?: FileRef;
   cover?: FileRef;
   video?: FileRef;

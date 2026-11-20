@@ -7,23 +7,20 @@ import { usePlayer } from '../lib/player';
 import { TRANSITION_RU } from '../lib/rules/engine';
 import { mostContrasting } from '../lib/rules/labels';
 import { MODES } from '../lib/rules/modes';
-import { speakInBrowser } from '../lib/tts';
 import type { DayRecord } from '../lib/types';
 import { numberDays, plural, useDays, useFileUrls } from '../lib/useDays';
 
 const SLIDE_SECONDS = 13;
-const MAX_SECONDS = 50;
 const LIGHT = '#efe9df';
 
 /**
- * Показ для жюри: самые непохожие дни дневника подряд, каждый со своей песней и голосом.
+ * Показ для жюри: самые непохожие дни дневника подряд, каждый со своей песней.
  * Одна кнопка — и готов материал для видео: видно, что система одна, а настроения разные.
  */
 export function ShowPage() {
   const { days, error } = useDays();
   const numbers = useMemo(() => numberDays(days ?? []), [days]);
   const [order, setOrder] = useState<'contrast' | 'date'>('contrast');
-  const [withVoice, setWithVoice] = useState(true);
   const [phase, setPhase] = useState<'intro' | 'play' | 'end'>('intro');
   const [i, setI] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -106,9 +103,6 @@ export function ShowPage() {
                 <label className="flex cursor-pointer items-center gap-2">
                   <input type="radio" checked={order === 'date'} onChange={() => setOrder('date')} className="accent-[#efe9df]" /> все по порядку
                 </label>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input type="checkbox" checked={withVoice} onChange={(e) => setWithVoice(e.target.checked)} className="accent-[#efe9df]" /> с голосом
-                </label>
               </div>
               <div className="mt-8 flex items-center gap-4">
                 <button type="button" className="btn border-[#efe9df] bg-[#efe9df] text-[#1f1c19] hover:!bg-transparent hover:!text-[#efe9df]" onClick={begin} autoFocus>
@@ -140,7 +134,6 @@ export function ShowPage() {
                 number={numbers.get(current.id) ?? 0}
                 index={i}
                 total={list.length}
-                withVoice={withVoice}
                 paused={paused}
                 onProgress={setProgress}
                 onDone={() => go(1)}
@@ -223,48 +216,28 @@ interface SlideProps {
   number: number;
   index: number;
   total: number;
-  withVoice: boolean;
   paused: boolean;
   onProgress: (p: number) => void;
   onDone: () => void;
 }
 
-function Slide({ day, number, index, total, withVoice, paused, onProgress, onDone }: SlideProps) {
+function Slide({ day, number, index, total, paused, onProgress, onDone }: SlideProps) {
   const photoUrls = useFileUrls(day.photos);
   const excerptUrl = useFileUrls(day.songFile ? [day.songFile] : undefined)?.[0];
-  const voiceUrl = useFileUrls(day.voice ? [day.voice] : undefined)?.[0];
   const player = usePlayer(day, excerptUrl);
-  const ready = Boolean(photoUrls?.length) && (!day.songFile || Boolean(excerptUrl)) && (!withVoice || !day.voice || Boolean(voiceUrl));
+  const ready = Boolean(photoUrls?.length) && (!day.songFile || Boolean(excerptUrl));
 
   const cb = useRef({ onProgress, onDone, paused });
   cb.current = { onProgress, onDone, paused };
-  const voice = useRef<{ audio?: HTMLAudioElement; stop?: () => void; on: boolean }>({ on: false });
   const started = useRef(false);
 
-  // старт: музыка сразу, голос — когда страница уже проявилась
+  // старт: музыка — когда страница начинает проявляться
   useEffect(() => {
     if (!ready) return;
-    const unduck = () => {
-      voice.current.on = false;
-      if (player.media.current) player.media.current.volume = 1;
-    };
     const a = window.setTimeout(() => {
       started.current = true;
       player.restart();
     }, 300);
-    const b = window.setTimeout(() => {
-      if (!withVoice || cb.current.paused) return;
-      voice.current.on = true;
-      if (player.media.current) player.media.current.volume = 0.3;
-      if (voiceUrl) {
-        const v = new Audio(voiceUrl);
-        voice.current.audio = v;
-        v.onended = unduck;
-        void v.play().catch(unduck);
-      } else {
-        voice.current.stop = speakInBrowser(day.text, day.style.voice, unduck);
-      }
-    }, 2600);
 
     let elapsed = 0;
     let last = performance.now();
@@ -275,14 +248,11 @@ function Slide({ day, number, index, total, withVoice, paused, onProgress, onDon
       last = now;
       if (cb.current.paused || finished) return;
       elapsed += dt;
-      const v = voice.current;
-      const vd = v.audio && Number.isFinite(v.audio.duration) ? v.audio.duration + 3.6 : 0;
-      const total = Math.min(MAX_SECONDS, Math.max(SLIDE_SECONDS, vd));
-      cb.current.onProgress(Math.min(1, elapsed / total));
+      cb.current.onProgress(Math.min(1, elapsed / SLIDE_SECONDS));
       const m = player.media.current;
-      const left = total - elapsed;
-      if (m && !v.on && left < 1.2) m.volume = Math.max(0, left / 1.2); // музыка уходит перед следующим днём
-      if ((elapsed >= total && !v.on) || elapsed >= MAX_SECONDS) {
+      const left = SLIDE_SECONDS - elapsed;
+      if (m && left < 1.2) m.volume = Math.max(0, left / 1.2); // музыка уходит перед следующим днём
+      if (elapsed >= SLIDE_SECONDS) {
         finished = true;
         cb.current.onDone();
       }
@@ -290,24 +260,15 @@ function Slide({ day, number, index, total, withVoice, paused, onProgress, onDon
 
     return () => {
       window.clearTimeout(a);
-      window.clearTimeout(b);
       window.clearInterval(timer);
-      voice.current.audio?.pause();
-      voice.current.stop?.();
-      voice.current = { on: false };
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
   useEffect(() => {
     if (!started.current) return;
-    if (paused) {
-      player.pause();
-      voice.current.audio?.pause();
-    } else {
-      player.start();
-      if (voice.current.on) void voice.current.audio?.play().catch(() => {});
-    }
+    if (paused) player.pause();
+    else player.start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paused]);
 
@@ -338,8 +299,6 @@ function Slide({ day, number, index, total, withVoice, paused, onProgress, onDon
           ♪ {day.song.artist} — {day.song.title}
           <br />
           {Math.round(m.bpm)} BPM → кадр каждые {m.beatsPerShot} долей · {TRANSITION_RU[m.transition]}
-          <br />
-          голос: {day.style.voice.label}
         </p>
         <div className="mt-6">
           <LiveMeter clock={player.clock} style={day.style} light />

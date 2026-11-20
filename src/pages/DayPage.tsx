@@ -12,8 +12,6 @@ import {
   RefreshCw,
   RotateCcw,
   Trash2,
-  Volume2,
-  VolumeX,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -27,7 +25,6 @@ import { baseOf, rebuildDay, restyle, retuneDay, systemAxes, type Step } from '.
 import { usePlayer } from '../lib/player';
 import { lookupSong } from '../lib/songMeta';
 import { store } from '../lib/storage';
-import { speakInBrowser } from '../lib/tts';
 import { computeFeel, quickFeel } from '../lib/analysis/feel';
 import type { Axes, DayFeel, DayRecord, FeelAxes } from '../lib/types';
 
@@ -77,21 +74,17 @@ interface ViewProps {
 function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
   const photoUrls = useFileUrls(day.photos);
   const excerptUrl = useFileUrls(day.songFile ? [day.songFile] : undefined)?.[0];
-  const voiceUrl = useFileUrls(day.voice ? [day.voice] : undefined)?.[0];
   const videoUrl = useFileUrls(day.video ? [day.video] : undefined)?.[0];
 
   const cardRef = useRef<HTMLDivElement>(null);
   // Часы страницы: время и живой звук — из фрагмента песни (его отдаёт плеер с волной), иначе собственный таймер.
   const { clock, playing, playKey, media: mediaRef, bindMedia: onMedia, pause, toggle, restart } = usePlayer(day);
-  const [voicePlaying, setVoicePlaying] = useState(false);
   const [busy, setBusy] = useState<null | 'zip' | 'video' | 'rebuild' | 'tune'>(null);
   const [progress, setProgress] = useState(0);
   const [steps, setSteps] = useState<Step[]>([]);
   const [editing, setEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState(day.title);
   const [coverKey, setCoverKey] = useState(0);
-  const voiceAudio = useRef<HTMLAudioElement | null>(null);
-  const stopSpeech = useRef<(() => void) | null>(null);
   const report = (s: Step) => setSteps((p) => (p.some((x) => x.id === s.id) ? p.map((x) => (x.id === s.id ? s : x)) : [...p, s]));
 
   // ── «не так ощущалось»: ручные оси с живым предпросмотром ────
@@ -105,27 +98,6 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
       if (Math.abs(base[k] - v) < 0.015) delete n[k]; // вернули на место системы — это не поправка
       return n;
     });
-
-  const stopVoice = useCallback(() => {
-    voiceAudio.current?.pause();
-    stopSpeech.current?.();
-    if (mediaRef.current) mediaRef.current.volume = 1;
-    setVoicePlaying(false);
-  }, []);
-  const startVoice = () => {
-    if (mediaRef.current) mediaRef.current.volume = 0.3; // музыка приглушается под голос
-    if (voiceUrl) {
-      const a = new Audio(voiceUrl);
-      voiceAudio.current = a;
-      a.onended = stopVoice;
-      void a.play().catch(stopVoice);
-    } else {
-      stopSpeech.current = speakInBrowser(day.text, day.style.voice, stopVoice);
-    }
-    setVoicePlaying(true);
-  };
-  const toggleVoice = () => (voicePlaying ? stopVoice() : startVoice());
-  useEffect(() => () => stopVoice(), [stopVoice]);
 
   // ── кинорежим ────────────────────────────────────────────────
   const exitKino = useCallback(() => (location.hash = `#/day/${day.id}`), [day.id]);
@@ -150,20 +122,16 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kino, next, prev, exitKino, go]);
 
-  // в кино день начинает жить сам: музыка, затем голос
+  // в кино день начинает жить сам — с музыкой
   const autoStarted = useRef(false);
   useEffect(() => {
     if (!kino || autoStarted.current || !photoUrls?.length) return;
     if (day.songFile && !excerptUrl) return; // ждём фрагмент песни
     autoStarted.current = true;
     const a = window.setTimeout(restart, 700);
-    const b = window.setTimeout(startVoice, 2600);
-    return () => {
-      window.clearTimeout(a);
-      window.clearTimeout(b);
-    };
+    return () => window.clearTimeout(a);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kino, photoUrls, excerptUrl, voiceUrl]);
+  }, [kino, photoUrls, excerptUrl]);
 
   // ── обложка ──────────────────────────────────────────────────
   const coverSaved = useRef(Boolean(day.cover));
@@ -268,7 +236,6 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
     onChange(next);
   };
   const retune = async (o: Partial<Axes>) => {
-    stopVoice();
     setBusy('tune');
     setSteps([]);
     try {
@@ -285,7 +252,6 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
     }
   };
   const rebuild = async () => {
-    stopVoice();
     pause();
     setBusy('rebuild');
     setSteps([]);
@@ -304,7 +270,6 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
   };
   const makeVideo = async () => {
     if (!cardRef.current) return;
-    stopVoice();
     setBusy('video');
     setProgress(0);
     try {
@@ -337,7 +302,6 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
     'запись.txt',
     `фото × ${day.photos.length}`,
     day.songFile ? 'песня-фрагмент.wav' : 'песня.txt (ссылка)',
-    day.voice ? 'озвучка.wav' : null,
     day.video ? `воспоминание.${day.video.mime.includes('mp4') ? 'mp4' : 'webm'}` : null,
     'обложка.jpg',
     'почему-так.txt',
@@ -396,9 +360,6 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
               </button>
               <button type="button" className="btn border-paper/40 bg-transparent text-paper shadow-none hover:bg-white/10" onClick={toggle}>
                 {playing ? <Pause size={14} /> : <Play size={14} />}
-              </button>
-              <button type="button" className="btn border-paper/40 bg-transparent text-paper shadow-none hover:bg-white/10" onClick={toggleVoice} aria-label="Голос">
-                {voicePlaying ? <VolumeX size={14} /> : <Volume2 size={14} />}
               </button>
               <button type="button" className="btn border-paper/40 bg-transparent text-paper shadow-none hover:bg-white/10" onClick={() => go(next)} disabled={!next} aria-label="Следующий день">
                 <ChevronRight size={14} />
@@ -467,9 +428,8 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
         <p className="mt-6 max-w-2xl text-[19px] leading-[32px] whitespace-pre-line">{day.text}</p>
         {day.signals.text.caption && <div className="note mt-6 max-w-full">{day.signals.text.caption}</div>}
 
-        <div className="mt-10 grid gap-8 xl:grid-cols-[1.45fr_1fr] xl:items-start">
+        <div className="mt-10 max-w-md">
           <SongPlayer day={day} excerptUrl={excerptUrl} onMedia={onMedia} playing={playing} />
-          <VoiceNote playing={voicePlaying} onToggle={toggleVoice} label={day.style.voice.label} remark={day.style.voice.style} />
         </div>
 
         <div className="mt-12">
@@ -563,32 +523,3 @@ function agoText(iso: string): string {
   return y === 1 ? 'это было год назад' : `это было ${y} ${plural(y, 'год', 'года', 'лет')} назад`;
 }
 
-const WAVE = Array.from({ length: 30 }, (_, i) => Math.round(22 + Math.abs(Math.sin(i * 1.7) * Math.cos(i * 0.6)) * 72));
-
-/** Голос записи — как голосовая заметка, приклеенная к странице. */
-function VoiceNote({ playing, onToggle, label, remark }: { playing: boolean; onToggle: () => void; label: string; remark: string }) {
-  return (
-    <div className="relative mt-3 -rotate-[1.2deg] bg-white px-4 pt-3 pb-2 shadow-[0_8px_14px_-6px_rgba(0,0,0,.25)]">
-      <span className="tape tape-pink -top-3 left-1/3 h-6 w-20 rotate-3" />
-      <div className="label">голос записи</div>
-      <div className="mt-2 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-label={playing ? 'Остановить голос' : 'Послушать запись'}
-          className="grid h-10 w-10 flex-none place-items-center rounded-full border-2 border-blue text-blue transition hover:bg-blue hover:text-white"
-        >
-          {playing ? <Pause size={16} /> : <Play size={16} className="translate-x-px" />}
-        </button>
-        <div className="flex h-8 flex-1 items-center gap-[2px]" aria-hidden>
-          {WAVE.map((h, i) => (
-            <i key={i} className={`flex-1 rounded-sm bg-blue/70 ${playing ? 'animate-pulse' : ''}`} style={{ height: `${h}%`, animationDelay: `${(i % 7) * 90}ms` }} />
-          ))}
-        </div>
-      </div>
-      <div className="mt-1 font-hand text-[22px] text-ink-soft" title={`«${remark}»`}>
-        {label}
-      </div>
-    </div>
-  );
-}

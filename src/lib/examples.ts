@@ -92,7 +92,7 @@ export async function exportExamples(): Promise<{ days: number; mb: number }> {
   const files: FileRef[] = [];
   let bytes = 0;
   for (const d of days) {
-    const refs = [...d.photos, d.songFile, d.voice, d.cover].filter(Boolean) as FileRef[];
+    const refs = [...d.photos, d.songFile, d.cover].filter(Boolean) as FileRef[];
     for (const ref of refs) {
       const b = await store.fileBlob(ref);
       bytes += b.size;
@@ -103,7 +103,7 @@ export async function exportExamples(): Promise<{ days: number; mb: number }> {
   const manifest: ExamplesManifest = {
     version: 1,
     exportedAt: new Date().toISOString(),
-    days: days.map((d) => ({ ...d, video: undefined })), // видео тяжёлое — его можно записать заново
+    days: days.map((d) => ({ ...d, video: undefined, voice: undefined })), // видео тяжёлое — его можно записать заново; озвучки больше нет
     files,
   };
   await post('/__examples/manifest', JSON.stringify(manifest), 'application/json');

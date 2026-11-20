@@ -8,7 +8,6 @@ import { folderName, folderPath } from './folder';
 import { buildStyle } from './rules/engine';
 import { MODES } from './rules/modes';
 import { store } from './storage';
-import { synthesize } from './tts';
 import type { Axes, DayRecord, FileRef, MusicSignals, PhotoSignals, TextSignals, WeatherSignals } from './types';
 import { fetchWeather, getPosition, weatherShort } from './weather';
 
@@ -98,18 +97,6 @@ function reportStyle(style: DayRecord['style'], report: Report) {
   });
 }
 
-async function stepVoice(day: DayRecord, report: Report) {
-  report({ id: 'voice', label: `Озвучиваю: ${day.style.voice.label}`, status: 'run' });
-  const voice = await synthesize(day.text, day.style.voice);
-  if (voice) {
-    day.voice = await store.putFile(`${baseOf(day)}/voice.wav`, voice);
-    await store.save(day);
-    report({ id: 'voice', label: `Озвучиваю: ${day.style.voice.label}`, status: 'done', detail: `голос ${day.style.voice.name}` });
-  } else {
-    report({ id: 'voice', label: `Озвучка: ${day.style.voice.label}`, status: 'skip', detail: 'будет голос браузера с тем же темпом' });
-  }
-}
-
 // ── новый день ────────────────────────────────────────────────────
 
 export async function createDay(input: NewDayInput, report: Report): Promise<DayRecord> {
@@ -190,8 +177,6 @@ export async function createDay(input: NewDayInput, report: Report): Promise<Day
   };
   await store.save(day);
   report({ id: 'save', label: `Сохраняю в папку «${folder}»`, status: 'done' });
-
-  await stepVoice(day, report);
   return day;
 }
 
@@ -231,7 +216,6 @@ export async function rebuildDay(old: DayRecord, report: Report): Promise<DayRec
   };
   await store.save(day);
   report({ id: 'save', label: `Папка «${day.folder}» обновлена`, status: 'done' });
-  await stepVoice(day, report);
   return day;
 }
 
@@ -254,7 +238,6 @@ export async function retuneDay(old: DayRecord, override: Partial<Axes>, report:
   const day: DayRecord = { ...restyle(old, override), cover: undefined, video: undefined };
   await store.save(day);
   report({ id: 'style', label: 'Пересобираю страницу по вашим осям', status: 'done', detail: `${MODES[day.style.mode].name} + ${MODES[day.style.secondary].name}` });
-  if (day.style.voice.name !== old.style.voice.name || !old.voice) await stepVoice(day, report);
   return day;
 }
 

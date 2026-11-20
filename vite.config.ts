@@ -141,7 +141,7 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export default defineConfig(({ mode }) => {
   // серверные ключи (без префикса VITE_) отдаём только в process.env dev-сервера
   const env = loadEnv(mode, process.cwd(), '');
-  for (const k of ['GEMINI_API_KEY', 'GEMINI_MODEL', 'GEMINI_TTS_MODEL']) {
+  for (const k of ['GEMINI_API_KEY', 'GEMINI_MODEL']) {
     if (env[k] && !process.env[k]) process.env[k] = env[k];
   }
   if (mode === 'standalone') {

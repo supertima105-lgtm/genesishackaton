@@ -60,7 +60,6 @@ export function ComparePage({ a, b }: { a?: string; b?: string }) {
       'ритм',
       (d) => `${Math.round(d.style.motion.bpm)} BPM · кадр каждые ${d.style.motion.beatsPerShot} долей · ${TRANSITION_RU[d.style.motion.transition]}`,
     ],
-    ['голос', (d) => `${d.style.voice.label} (${d.style.voice.name})`],
     ['погода', (d) => (d.signals.weather ? weatherShort(d.signals.weather) : '—')],
     [
       'палитра',

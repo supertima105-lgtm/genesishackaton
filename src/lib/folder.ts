@@ -30,7 +30,7 @@ export function folderPath(date: string, title: string, id: string) {
   return `${date}_${slugify(title) || 'den'}_${id.slice(0, 6)}`;
 }
 
-/** Скачивает папку дня целиком: текст, фото, песня, озвучка, обложка и объяснение стиля. */
+/** Скачивает папку дня целиком: текст, фото, песня, обложка и объяснение стиля. */
 export async function exportFolderZip(day: DayRecord, store: Store): Promise<Blob> {
   const zip = new JSZip();
   const dir = zip.folder(day.folder)!;
@@ -45,7 +45,6 @@ export async function exportFolderZip(day: DayRecord, store: Store): Promise<Blo
     'песня.txt',
     `${day.song.artist} — ${day.song.title}\n${day.song.link?.url ?? ''}\n\nФрагмент ${Math.round(day.song.excerptDuration ?? 0)} с — целиком песня не хранится.\n`,
   );
-  if (day.voice) dir.file('озвучка.wav', await store.fileBlob(day.voice));
   if (day.cover) dir.file('обложка.jpg', await store.fileBlob(day.cover));
   if (day.video) dir.file(`воспоминание.${day.video.mime.includes('mp4') ? 'mp4' : 'webm'}`, await store.fileBlob(day.video));
 

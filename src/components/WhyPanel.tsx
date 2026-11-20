@@ -122,7 +122,7 @@ export function WhyPanel({ day, tuning, feel }: { day: DayRecord; tuning?: Tunin
           Примесь: {second.name} · {Math.round(day.style.blend * 100)}%
         </p>
         <ul className="mt-4 space-y-3">
-          {day.reasons.map((r, i) => (
+          {day.reasons.filter((r) => !r.effect.startsWith('голос озвучки')).map((r, i) => (
             <li key={i} className="text-sm leading-snug">
               <span className={`label mr-2 inline-block w-16 ${r.source === 'вы' ? 'text-rust' : ''}`}>{r.source}</span>
               <span>{r.cause}</span>
