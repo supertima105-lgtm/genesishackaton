@@ -387,14 +387,174 @@ body {
 
 /* ── книга-календарь: раскрытый дневник на столе ─────────────────── */
 @layer components {
-.book {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  perspective: 2600px;
-  perspective-origin: 50% 40%;
+/* сцена: книга лежит перед нами чуть под углом — как будто держишь её в руках */
+.book-stage {
+  perspective: 2100px;
+  perspective-origin: 50% 20%;
 }
-/* кожаная обложка под страницами, со строчкой по краю */
+.book3d {
+  position: relative;
+  aspect-ratio: 1.56;
+  transform-style: preserve-3d;
+  transform: rotateX(24deg);
+}
+/* мягкая тень книги на столе */
+.book-shadow {
+  position: absolute;
+  inset: 3% 1% -5%;
+  border-radius: 28px;
+  background: rgba(45, 25, 8, 0.55);
+  filter: blur(24px);
+  transform: translateZ(-44px);
+  pointer-events: none;
+}
+/* половина разворота: страницы чуть поднимаются от корешка к краям (V) */
+.half {
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 100%;
+  transform-style: preserve-3d;
+}
+.half-l {
+  left: 0;
+  transform-origin: 100% 50%;
+  transform: rotateY(4deg);
+}
+.half-r {
+  left: 50%;
+  transform-origin: 0 50%;
+  transform: rotateY(-4deg);
+}
+.half > .page {
+  position: absolute;
+  inset: 0;
+}
+/* половина кожаной обложки — лежит под стопкой страниц */
+.board {
+  position: absolute;
+  top: -16px;
+  bottom: -16px;
+  transform: translateZ(calc(-1 * var(--h)));
+  background-color: #5a321a;
+  box-shadow: inset 0 0 0 3px rgba(0, 0, 0, 0.2), inset 0 2px 0 rgba(255, 220, 170, 0.12);
+}
+.half-l .board {
+  left: -18px;
+  right: 0;
+  border-radius: 13px 0 0 13px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='l'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4'/%3E%3CfeColorMatrix values='0 0 0 0 .1 0 0 0 0 .05 0 0 0 0 .02 0 0 0 .35 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23l)'/%3E%3C/svg%3E"),
+    radial-gradient(120% 80% at 60% 0%, rgba(255, 205, 150, 0.15), transparent 60%), linear-gradient(90deg, #44240f, #6a3c1f 22%, #5c3219 86%, #2c1609);
+}
+.half-r .board {
+  left: 0;
+  right: -18px;
+  border-radius: 0 13px 13px 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='l'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4'/%3E%3CfeColorMatrix values='0 0 0 0 .1 0 0 0 0 .05 0 0 0 0 .02 0 0 0 .35 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23l)'/%3E%3C/svg%3E"),
+    radial-gradient(120% 80% at 40% 0%, rgba(255, 205, 150, 0.15), transparent 60%), linear-gradient(270deg, #44240f, #6a3c1f 22%, #5c3219 86%, #2c1609);
+}
+.board::before {
+  content: '';
+  position: absolute;
+  border: 1.5px dashed rgba(240, 205, 150, 0.25);
+}
+.half-l .board::before {
+  inset: 7px 0 7px 7px;
+  border-right: 0;
+  border-radius: 9px 0 0 9px;
+}
+.half-r .board::before {
+  inset: 7px 7px 7px 0;
+  border-left: 0;
+  border-radius: 0 9px 9px 0;
+}
+/* торец обложки */
+.board-edge {
+  position: absolute;
+  top: calc(100% + 16px);
+  height: 8px;
+  transform-origin: 50% 0;
+  transform: translateZ(calc(-1 * var(--h))) rotateX(-90deg);
+  background: linear-gradient(180deg, #4d2a13, #241209);
+}
+.half-l .board-edge {
+  left: -18px;
+  right: 0;
+  border-bottom-left-radius: 6px;
+}
+.half-r .board-edge {
+  left: 0;
+  right: -18px;
+  border-bottom-right-radius: 6px;
+}
+/* обрез страниц — видно, что это толстая книга */
+.stack-edge {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: var(--h);
+  transform-origin: 50% 0;
+  transform: rotateX(-90deg);
+}
+.half-l .stack-edge {
+  border-bottom-left-radius: 4px;
+  background: linear-gradient(270deg, rgba(40, 22, 5, 0.35), transparent 10%), linear-gradient(180deg, rgba(255, 252, 240, 0.35), transparent 30%, rgba(70, 40, 10, 0.22)),
+    repeating-linear-gradient(180deg, #f4ead4 0 1.6px, #d6c5a2 1.6px 2.4px);
+}
+.half-r .stack-edge {
+  border-bottom-right-radius: 4px;
+  background: linear-gradient(90deg, rgba(40, 22, 5, 0.35), transparent 10%), linear-gradient(180deg, rgba(255, 252, 240, 0.35), transparent 30%, rgba(70, 40, 10, 0.22)),
+    repeating-linear-gradient(180deg, #f4ead4 0 1.6px, #d6c5a2 1.6px 2.4px);
+}
+.stack-side {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--h);
+  background: linear-gradient(90deg, rgba(255, 252, 240, 0.3), rgba(70, 40, 10, 0.2)), repeating-linear-gradient(90deg, #f4ead4 0 1.6px, #d6c5a2 1.6px 2.4px);
+}
+.half-l .stack-side {
+  left: 0;
+  transform-origin: 0 50%;
+  transform: rotateY(90deg);
+}
+.half-r .stack-side {
+  right: 0;
+  transform-origin: 100% 50%;
+  transform: rotateY(-90deg);
+}
+/* ленточка-закладка: лежит на странице, перегибается через обрез и свисает на стол */
+.ribbon-a,
+.ribbon-b,
+.ribbon-c {
+  position: absolute;
+  right: 7%;
+  width: 16px;
+  pointer-events: none;
+}
+.ribbon-a {
+  bottom: 0;
+  height: 54px;
+  transform: translateZ(1.5px);
+  background: linear-gradient(90deg, #8a2717, #b9472d 40%, #c65739 55%, #95301d);
+  box-shadow: 0 0 4px rgba(60, 20, 5, 0.35);
+}
+.ribbon-b {
+  top: 100%;
+  height: var(--h);
+  transform-origin: 50% 0;
+  transform: rotateX(-90deg) translateZ(0.6px);
+  background: linear-gradient(90deg, #6e1d10, #9a3620 45%, #7a2414);
+}
+.ribbon-c {
+  top: 100%;
+  height: 96px;
+  transform: translateZ(calc(-1 * var(--h) + 0.6px));
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.28), transparent 30%), linear-gradient(90deg, #8a2717, #b9472d 40%, #c65739 55%, #95301d);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 88%, 0 100%);
+}
+/* кожаная обложка под страницами (одностраничная версия на телефоне), со строчкой по краю */
 .book-cover {
   position: absolute;
   inset: -16px -20px -24px;
@@ -442,120 +602,128 @@ body {
   z-index: 20;
   pointer-events: none;
 }
+/* объём бумаги: страница уходит в перегиб у корешка, «горб» ловит свет, край чуть темнее */
 .page-left::after {
-  background: linear-gradient(270deg, rgba(60, 36, 10, 0.34) 0, rgba(60, 36, 10, 0.13) 2.6%, transparent 9%),
-    linear-gradient(90deg, rgba(255, 250, 235, 0.35), transparent 5%);
+  background: linear-gradient(270deg, rgba(50, 30, 8, 0.42) 0, rgba(50, 30, 8, 0.18) 2.5%, rgba(50, 30, 8, 0.05) 7%, transparent 12%),
+    linear-gradient(270deg, transparent 9%, rgba(255, 250, 235, 0.22) 16%, transparent 28%),
+    linear-gradient(90deg, rgba(90, 60, 20, 0.14) 0, rgba(255, 250, 235, 0.28) 1.3%, transparent 5%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 40%, rgba(60, 35, 10, 0.06));
 }
 .page-right::after {
-  background: linear-gradient(90deg, rgba(60, 36, 10, 0.34) 0, rgba(60, 36, 10, 0.13) 2.6%, transparent 9%),
-    linear-gradient(270deg, rgba(255, 250, 235, 0.35), transparent 5%);
+  background: linear-gradient(90deg, rgba(50, 30, 8, 0.42) 0, rgba(50, 30, 8, 0.18) 2.5%, rgba(50, 30, 8, 0.05) 7%, transparent 12%),
+    linear-gradient(90deg, transparent 9%, rgba(255, 250, 235, 0.22) 16%, transparent 28%),
+    linear-gradient(270deg, rgba(90, 60, 20, 0.14) 0, rgba(255, 250, 235, 0.28) 1.3%, transparent 5%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 40%, rgba(60, 35, 10, 0.06));
 }
 .page-single::after {
   background: linear-gradient(90deg, rgba(60, 36, 10, 0.2) 0, transparent 5%);
 }
 
-/* перелистываемый лист */
+/* перелистываемый лист: 12 вертикальных полос, каждая чуть повёрнута относительно соседней —
+   лист гнётся, как настоящая бумага. Углы считает JS на каждом кадре. */
 .leaf {
   position: absolute;
   top: 0;
-  bottom: 0;
   width: 50%;
-  z-index: 10;
+  height: 100%;
   transform-style: preserve-3d;
+  transform: translateZ(1px);
   pointer-events: none;
-  animation-duration: var(--flip, 0.9s);
-  animation-timing-function: cubic-bezier(0.62, 0.04, 0.27, 1);
-  animation-fill-mode: forwards;
 }
 .leaf-fwd {
   left: 50%;
-  transform-origin: 0 50%;
-  animation-name: leaf-fwd;
 }
 .leaf-back {
   left: 0;
-  transform-origin: 100% 50%;
-  animation-name: leaf-back;
 }
-.leaf-face {
+.strip {
+  position: absolute;
+  top: 0;
+  width: calc(var(--pw) / 12);
+  height: 100%;
+  transform-style: preserve-3d;
+}
+.leaf-fwd .strip {
+  left: 100%;
+  transform-origin: 0 50%;
+}
+.leaf-back .strip {
+  right: 100%;
+  transform-origin: 100% 50%;
+}
+.leaf-fwd > .strip {
+  left: 0;
+}
+.leaf-back > .strip {
+  right: 0;
+}
+.strip-face {
   position: absolute;
   inset: 0;
+  overflow: hidden;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  transform: scaleX(1.025);
 }
-.leaf-face > .page {
+.strip-under {
+  transform: rotateY(180deg) scaleX(1.025);
+}
+.strip-page {
+  position: absolute;
+  top: 0;
+  width: var(--pw);
   height: 100%;
 }
-.leaf-under {
-  transform: rotateY(180deg);
-}
-.leaf-shade {
+.strip-page > .page {
   position: absolute;
   inset: 0;
-  z-index: 30;
+}
+.strip-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
   pointer-events: none;
-  animation-duration: var(--flip, 0.9s);
-  animation-fill-mode: forwards;
-}
-.leaf-shade-up {
-  animation-name: shade-up;
-}
-.leaf-shade-down {
-  animation-name: shade-down;
-}
-.leaf-fwd .leaf-shade-up,
-.leaf-back .leaf-shade-down {
-  background: linear-gradient(90deg, rgba(35, 20, 4, 0.5), rgba(35, 20, 4, 0.12) 70%, rgba(35, 20, 4, 0.22));
-}
-.leaf-back .leaf-shade-up,
-.leaf-fwd .leaf-shade-down {
-  background: linear-gradient(270deg, rgba(35, 20, 4, 0.5), rgba(35, 20, 4, 0.12) 70%, rgba(35, 20, 4, 0.22));
 }
 .leaf .hand-ring path {
   animation: none;
   stroke-dashoffset: 0;
 }
-/* тень, которую лист отбрасывает на страницы под собой */
+/* тень, которую лист отбрасывает на страницы под собой; ширину и силу задаёт JS */
 .cast {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 50%;
-  z-index: 9;
-  pointer-events: none;
+  width: 0;
   opacity: 0;
-  animation-duration: var(--flip, 0.9s);
-  animation-timing-function: linear;
-  animation-fill-mode: forwards;
+  transform: translateZ(0.5px);
+  pointer-events: none;
 }
-.cast-r {
-  left: 50%;
-  background: linear-gradient(90deg, rgba(35, 20, 4, 0.45), rgba(35, 20, 4, 0.12) 35%, transparent 75%);
+.half-l .cast {
+  right: 0;
+  background: linear-gradient(270deg, rgba(30, 16, 3, 0.6), rgba(30, 16, 3, 0.22) 45%, transparent);
 }
-.cast-l {
+.half-r .cast {
   left: 0;
-  background: linear-gradient(270deg, rgba(35, 20, 4, 0.45), rgba(35, 20, 4, 0.12) 35%, transparent 75%);
-}
-.cast-lift {
-  animation-name: cast-lift;
-}
-.cast-land {
-  animation-name: cast-land;
+  background: linear-gradient(90deg, rgba(30, 16, 3, 0.6), rgba(30, 16, 3, 0.22) 45%, transparent);
 }
 
-/* загнутый уголок — за него можно «взять» страницу */
+/* загнутый уголок — часть самой страницы, переворачивается вместе с ней; за него можно тянуть */
 .dog-ear {
   position: absolute;
   bottom: 0;
-  z-index: 15;
-  width: 3.6%;
+  z-index: 25;
+  width: 6cqw;
   aspect-ratio: 1;
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
   transition: width 0.3s cubic-bezier(0.3, 1.3, 0.5, 1);
 }
-.dog-ear:hover,
-.dog-ear:focus-visible {
-  width: 6.5%;
+.dog-ear:active {
+  cursor: grabbing;
+}
+.half .dog-ear:hover,
+.half .dog-ear:focus-visible {
+  width: 11cqw;
 }
 .dog-ear-r {
   right: 0;
@@ -568,23 +736,6 @@ body {
   border-bottom-left-radius: 7px;
   background: linear-gradient(to bottom left, #fffaee 0, #efe2c4 38%, #cdb88f 49.5%, transparent 50%),
     linear-gradient(to top right, #e2d2b0 0, #c9b48b 46%, #b39c72 50%, transparent 50%);
-}
-
-/* ленточка-закладка */
-.ribbon {
-  position: absolute;
-  left: calc(50% - 38px);
-  bottom: -58px;
-  z-index: 12;
-  filter: drop-shadow(1px 3px 2px rgba(40, 15, 5, 0.4));
-  pointer-events: none;
-}
-.ribbon i {
-  display: block;
-  width: 17px;
-  height: 96px;
-  background: linear-gradient(90deg, #8a2717, #b9472d 40%, #c65739 55%, #95301d);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 89%, 0 100%);
 }
 
 /* полароид на странице */
@@ -767,7 +918,10 @@ body {
 /* обводка маркером вокруг сегодняшнего дня */
 .hand-ring {
   position: absolute;
-  inset: -7% -5%;
+  top: -7%;
+  left: -5%;
+  width: 110%;
+  height: 114%;
   z-index: 4;
   overflow: visible;
   pointer-events: none;
@@ -801,63 +955,6 @@ body {
 }
 }
 
-@keyframes leaf-fwd {
-  from {
-    transform: translateZ(1px) rotateY(0deg);
-  }
-  to {
-    transform: translateZ(1px) rotateY(-180deg);
-  }
-}
-@keyframes leaf-back {
-  from {
-    transform: translateZ(1px) rotateY(0deg);
-  }
-  to {
-    transform: translateZ(1px) rotateY(180deg);
-  }
-}
-@keyframes shade-up {
-  0% {
-    opacity: 0;
-  }
-  50%,
-  100% {
-    opacity: 1;
-  }
-}
-@keyframes shade-down {
-  0%,
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-@keyframes cast-lift {
-  0% {
-    opacity: 1;
-  }
-  55% {
-    opacity: 0.2;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-@keyframes cast-land {
-  0%,
-  45% {
-    opacity: 0;
-  }
-  85% {
-    opacity: 0.85;
-  }
-  100% {
-    opacity: 0;
-  }
-}
 @keyframes draw-in {
   to {
     stroke-dashoffset: 0;

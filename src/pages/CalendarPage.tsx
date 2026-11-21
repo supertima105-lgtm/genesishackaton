@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from 'react';
 import { MODES } from '../lib/rules/modes';
 import { store } from '../lib/storage';
 import type { Axes, DayRecord, FileRef, ModeId } from '../lib/types';
@@ -96,13 +96,25 @@ interface Ctx {
   byDate: ByDate;
   today: string;
 }
-interface Flip {
+interface Anim {
   to: string;
   dir: 1 | -1;
-  ms: number;
+  mode: 'auto' | 'drag';
 }
+type Render = (p: number) => void;
 
 const vars = (v: Record<string, string | number>) => v as CSSProperties;
+
+/** Полос в перелистываемом листе: чем больше, тем глаже изгиб. */
+const STRIPS = 12;
+/** Наклон половинок разворота к корешку, ° — страницы лежат буквой V. */
+const TILT = 4;
+const FLIP_MS = 1150;
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+const easeOut = (t: number) => 1 - (1 - t) ** 3;
+/** Толщина стопки страниц под половиной (px): почти поровну, чуть толще там, где листов больше. */
+const stackH = (idx: number, side: 'l' | 'r') => 22 + (side === 'l' ? idx - 6 : 6 - idx) * 0.7;
 
 // ── страница ──────────────────────────────────────────────────────
 
@@ -120,32 +132,109 @@ export function CalendarPage({ period }: { period?: string }) {
   }, [days]);
 
   const [shown, setShown] = useState(target);
-  const [flip, setFlip] = useState<Flip | null>(null);
+  const [want, setWant] = useState(target);
+  const [anim, setAnim] = useState<Anim | null>(null);
   const [enter, setEnter] = useState<1 | -1>(1);
+
+  const bookRef = useRef<HTMLDivElement>(null);
+  const castL = useRef<HTMLDivElement>(null);
+  const castR = useRef<HTMLDivElement>(null);
+  const leafRender = useRef<Render | null>(null);
+  const pRef = useRef(0);
+  const raf = useRef(0);
+
+  // куда листать — следует за адресом
+  useEffect(() => setWant(target), [target]);
+
+  /** Плавно ведёт лист от p=from к p=to; на каждом кадре лист перерисовывается без React. */
+  const tween = useCallback((from: number, to: number, ms: number, ease: (t: number) => number, done: () => void) => {
+    cancelAnimationFrame(raf.current);
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - t0) / ms);
+      pRef.current = from + (to - from) * ease(t);
+      leafRender.current?.(pRef.current);
+      if (t < 1) raf.current = requestAnimationFrame(tick);
+      else done();
+    };
+    raf.current = requestAnimationFrame(tick);
+  }, []);
+  useEffect(() => () => cancelAnimationFrame(raf.current), []);
 
   // адрес сменился → перелистываем к нему (быстрые нажатия догоняются следующим листом)
   useEffect(() => {
-    if (flip || target === shown) return;
-    const dir = ord(target) > ord(shown) ? 1 : -1;
+    if (anim || want === shown) return;
+    const dir = ord(want) > ord(shown) ? 1 : -1;
     if (!wide || calm || !days) {
       setEnter(dir);
-      setShown(target);
+      setShown(want);
       return;
     }
-    setFlip({ to: target, dir, ms: Math.abs(ord(target) - ord(shown)) > 1 ? 1050 : 900 });
-  }, [target, shown, flip, wide, calm, days]);
+    pRef.current = 0;
+    setAnim({ to: want, dir, mode: 'auto' });
+  }, [want, shown, anim, wide, calm, days]);
 
   useEffect(() => {
-    if (!flip) return;
-    const t = setTimeout(() => {
-      setShown(flip.to);
-      setFlip(null);
-    }, flip.ms);
-    return () => clearTimeout(t);
-  }, [flip]);
+    if (anim?.mode !== 'auto') return;
+    const to = anim.to;
+    tween(pRef.current, 1, FLIP_MS, easeInOut, () => {
+      setShown(to);
+      setAnim(null);
+    });
+  }, [anim, tween]);
+
+  // ширина страницы в px → --pw: по ней режутся полосы листа
+  const hasDays = Boolean(days);
+  useLayoutEffect(() => {
+    const el = bookRef.current;
+    if (!el) return;
+    const set = () => el.style.setProperty('--pw', `${el.offsetWidth / 2}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [wide, hasDays]);
 
   const go = (d: number) => {
     location.hash = `#/calendar/${step(target, d)}`;
+  };
+
+  /** Тянем страницу за уголок: лист идёт за курсором; отпустили — долистывается или ложится обратно. */
+  const grab = (dir: 1 | -1) => (e: React.PointerEvent) => {
+    if (anim || e.button !== 0 || !bookRef.current) return;
+    e.preventDefault();
+    const to = step(shown, dir);
+    if (calm) {
+      location.hash = `#/calendar/${to}`;
+      return;
+    }
+    const width = bookRef.current.getBoundingClientRect().width;
+    const sx = e.clientX;
+    let moved = false;
+    pRef.current = 0;
+    setAnim({ to, dir, mode: 'drag' });
+    const move = (ev: PointerEvent) => {
+      if (Math.abs(ev.clientX - sx) > 5) moved = true;
+      pRef.current = clamp01(((sx - ev.clientX) * dir) / (width * 0.8));
+      leafRender.current?.(pRef.current);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      const p = pRef.current;
+      if (!moved || p > 0.22)
+        tween(p, 1, moved ? 260 + (1 - p) * 700 : FLIP_MS, moved ? easeOut : easeInOut, () => {
+          setWant(to);
+          setShown(to);
+          setAnim(null);
+          location.hash = `#/calendar/${to}`;
+        });
+      else tween(p, 0, 200 + p * 600, easeOut, () => setAnim(null));
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   };
 
   useEffect(() => {
@@ -166,7 +255,7 @@ export function CalendarPage({ period }: { period?: string }) {
     onTouchEnd: (e: React.TouchEvent) => {
       const s = touch.current;
       touch.current = null;
-      if (!s) return;
+      if (!s || anim) return;
       const dx = e.changedTouches[0].clientX - s.x;
       const dy = e.changedTouches[0].clientY - s.y;
       if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.4) go(dx < 0 ? 1 : -1);
@@ -180,7 +269,6 @@ export function CalendarPage({ period }: { period?: string }) {
   const left = (k: string) => (isYear(k) ? <TitlePage year={Number(k)} {...ctx} /> : <MonthLeft k={k} {...ctx} />);
   const right = (k: string) => (isYear(k) ? <TocPage year={Number(k)} {...ctx} /> : <MonthRight k={k} {...ctx} />);
   const label = (k: string) => (isYear(k) ? `Оглавление ${k}` : `${monthName(Number(k.slice(0, 4)), Number(k.slice(5)))}${k.slice(0, 4) !== target.slice(0, 4) ? ` ${k.slice(0, 4)}` : ''}`);
-  const idx = leafIndex(shown);
 
   if (!wide)
     return (
@@ -201,47 +289,59 @@ export function CalendarPage({ period }: { period?: string }) {
       </section>
     );
 
-  const flipVars = flip ? vars({ '--flip': `${flip.ms}ms` }) : undefined;
+  const idx = leafIndex(shown);
+  // во время листания под листом уже лежит страница, к которой листаем
+  const staticLeft = anim?.dir === -1 ? left(anim.to) : left(shown);
+  const staticRight = anim?.dir === 1 ? right(anim.to) : right(shown);
+  const prevLabel = label(step(shown, -1));
+  const nextLabel = label(step(shown, 1));
+
   return (
     <section {...swipe}>
-      <TopBar target={target} today={today} hint="листай стрелками ← → или потяни за уголок" />
-      <div className="mt-7 mb-16 grid grid-cols-[72px_1fr_72px] items-center gap-4 xl:gap-8">
+      <TopBar target={target} today={today} hint="листай стрелками ← → или потяни страницу за уголок" />
+      <div className="mt-8 mb-24 grid grid-cols-[72px_1fr_72px] items-center gap-4 xl:gap-8">
         <NavButton dir={-1} label={label(step(target, -1))} onClick={() => go(-1)} />
-        <div className="book mx-auto w-full" style={{ maxWidth: 'min(1120px, calc((100vh - 230px) * 1.56))' }}>
-          <div className="book-cover" />
-          <Page side="left" depth={3 + idx}>
-            {flip?.dir === -1 ? left(flip.to) : left(shown)}
-          </Page>
-          <Page side="right" depth={3 + 12 - idx}>
-            {flip?.dir === 1 ? right(flip.to) : right(shown)}
-          </Page>
+        <div className="book-stage mx-auto w-full" style={{ maxWidth: 'min(1120px, calc((100vh - 250px) * 1.56))' }}>
+          <div className="book3d" ref={bookRef}>
+            <div className="book-shadow" />
 
-          {flip && (
-            <>
-              <div className={`cast cast-lift ${flip.dir === 1 ? 'cast-r' : 'cast-l'}`} style={flipVars} />
-              <div className={`cast cast-land ${flip.dir === 1 ? 'cast-l' : 'cast-r'}`} style={flipVars} />
-              <div className={`leaf ${flip.dir === 1 ? 'leaf-fwd' : 'leaf-back'}`} style={flipVars}>
-                <div className="leaf-face">
-                  <Page side={flip.dir === 1 ? 'right' : 'left'}>{flip.dir === 1 ? right(shown) : left(shown)}</Page>
-                  <div className="leaf-shade leaf-shade-up" />
-                </div>
-                <div className="leaf-face leaf-under">
-                  <Page side={flip.dir === 1 ? 'left' : 'right'}>{flip.dir === 1 ? left(flip.to) : right(flip.to)}</Page>
-                  <div className="leaf-shade leaf-shade-down" />
-                </div>
-              </div>
-            </>
-          )}
+            <div className="half half-l" style={vars({ '--h': `${stackH(idx, 'l')}px` })}>
+              <div className="board" />
+              <div className="board-edge" />
+              <div className="stack-side" />
+              <div className="stack-edge" />
+              <Page side="left" onCorner={anim ? undefined : grab(-1)} onCornerKey={() => go(-1)} cornerLabel={`Назад: ${prevLabel}`}>
+                {staticLeft}
+              </Page>
+              <div className="cast" ref={castL} />
+              <span className="ribbon-a" aria-hidden />
+              <span className="ribbon-b" aria-hidden />
+              <span className="ribbon-c" aria-hidden />
+            </div>
 
-          {!flip && (
-            <>
-              <button type="button" className="dog-ear dog-ear-l" onClick={() => go(-1)} aria-label={`Назад: ${label(step(target, -1))}`} title={label(step(target, -1))} />
-              <button type="button" className="dog-ear dog-ear-r" onClick={() => go(1)} aria-label={`Вперёд: ${label(step(target, 1))}`} title={label(step(target, 1))} />
-            </>
-          )}
-          <span className="ribbon" aria-hidden>
-            <i />
-          </span>
+            <div className="half half-r" style={vars({ '--h': `${stackH(idx, 'r')}px` })}>
+              <div className="board" />
+              <div className="board-edge" />
+              <div className="stack-side" />
+              <div className="stack-edge" />
+              <Page side="right" onCorner={anim ? undefined : grab(1)} onCornerKey={() => go(1)} cornerLabel={`Вперёд: ${nextLabel}`}>
+                {staticRight}
+              </Page>
+              <div className="cast" ref={castR} />
+            </div>
+
+            {anim && (
+              <Leaf
+                dir={anim.dir}
+                front={anim.dir === 1 ? <Page side="right">{right(shown)}</Page> : <Page side="left">{left(shown)}</Page>}
+                back={anim.dir === 1 ? <Page side="left">{left(anim.to)}</Page> : <Page side="right">{right(anim.to)}</Page>}
+                renderRef={leafRender}
+                pRef={pRef}
+                origin={anim.dir === 1 ? castR : castL}
+                land={anim.dir === 1 ? castL : castR}
+              />
+            )}
+          </div>
         </div>
         <NavButton dir={1} label={label(step(target, 1))} onClick={() => go(1)} />
       </div>
@@ -249,20 +349,159 @@ export function CalendarPage({ period }: { period?: string }) {
   );
 }
 
-/** Стопка страниц под листом — тоньше там, где листов осталось мало. */
-function stackShadow(side: 'left' | 'right', n: number) {
-  const s = side === 'left' ? -1 : 1;
-  const out: string[] = [];
-  for (let i = 1; i <= n; i++) out.push(`${s * i}px ${Math.ceil(i * 0.7)}px 0 ${i % 3 === 0 ? '#cdbb96' : i % 2 ? '#f2e7cf' : '#e3d4b5'}`);
-  out.push(`${s * (n + 3)}px ${n + 2}px 12px -4px rgba(40,20,5,.35)`);
-  return out.join(',');
+/**
+ * Перелистываемый лист. Вложенные полосы: каждая повёрнута относительно предыдущей, поэтому лист
+ * гнётся. Пока страницу поднимают, свободный край ведёт; перевалив через корешок — отстаёт и ложится последним.
+ */
+function Leaf({
+  dir,
+  front,
+  back,
+  renderRef,
+  pRef,
+  origin,
+  land,
+}: {
+  dir: 1 | -1;
+  front: ReactNode;
+  back: ReactNode;
+  renderRef: MutableRefObject<Render | null>;
+  pRef: MutableRefObject<number>;
+  origin: RefObject<HTMLDivElement | null>;
+  land: RefObject<HTMLDivElement | null>;
+}) {
+  const strips = useRef<(HTMLDivElement | null)[]>([]);
+  const shades = useRef<(HTMLDivElement | null)[]>([]);
+
+  useLayoutEffect(() => {
+    const sign = dir === 1 ? -1 : 1;
+    const rad = Math.PI / 180;
+    const dark = (a: number) => (1 - Math.abs(Math.cos(a * rad))) ** 1.3 * 0.42;
+    const render: Render = (p) => {
+      const bend = 0.22 * Math.sin(2 * Math.PI * p) + 0.12 * Math.sin(Math.PI * p);
+      const A: number[] = [];
+      for (let i = 0; i < STRIPS; i++) A.push(TILT + (180 - 2 * TILT) * clamp01(p + ((i + 1) / STRIPS) ** 1.6 * bend));
+      let reach = 0;
+      let lift = 0;
+      for (let i = 0; i < STRIPS; i++) {
+        const s = strips.current[i];
+        if (s) s.style.transform = `rotateY(${(sign * (i === 0 ? A[0] : A[i] - A[i - 1])).toFixed(3)}deg)`;
+        const dIn = dark(i === 0 ? A[0] : (A[i] + A[i - 1]) / 2).toFixed(3);
+        const dOut = dark(i === STRIPS - 1 ? A[i] : (A[i] + A[i + 1]) / 2).toFixed(3);
+        const g = (deg: number) => `linear-gradient(${deg}deg, rgba(28,16,3,${dIn}), rgba(28,16,3,${dOut}))`;
+        const fr = shades.current[2 * i];
+        const bk = shades.current[2 * i + 1];
+        if (fr) fr.style.background = g(dir === 1 ? 90 : 270);
+        if (bk) bk.style.background = g(dir === 1 ? 270 : 90);
+        reach += Math.cos(A[i] * rad) / STRIPS;
+        lift += Math.sin(A[i] * rad) / STRIPS;
+      }
+      // тень листа: на исходной странице, пока он над ней, и на принимающей, когда он ложится
+      const soft = clamp01(lift * 4);
+      const o = origin.current;
+      const l = land.current;
+      if (o) {
+        o.style.width = `${clamp01(Math.max(0, reach) + 0.3 * lift) * 100}%`;
+        o.style.opacity = (0.55 * (1 - p) * soft).toFixed(3);
+      }
+      if (l) {
+        l.style.width = `${clamp01(Math.max(0, -reach) + 0.3 * lift) * 100}%`;
+        l.style.opacity = (0.6 * p * soft).toFixed(3);
+      }
+    };
+    renderRef.current = render;
+    render(pRef.current);
+    return () => {
+      renderRef.current = null;
+      for (const c of [origin.current, land.current]) {
+        if (!c) continue;
+        c.style.width = '0';
+        c.style.opacity = '0';
+      }
+    };
+  }, [dir, renderRef, pRef, origin, land]);
+
+  /** Какой кусок страницы на полосе k: лицо — текущая страница, оборот — та, что откроется. */
+  const offset = (k: number, face: 'front' | 'back') => ((dir === 1) === (face === 'front') ? k : STRIPS - 1 - k) / STRIPS;
+  const strip = (k: number): ReactNode => (
+    <div
+      className="strip"
+      ref={(el) => {
+        strips.current[k] = el;
+      }}
+    >
+      <div className="strip-face">
+        <div className="strip-page" style={{ left: `calc(var(--pw) * ${-offset(k, 'front')})` }}>
+          {front}
+        </div>
+        <div
+          className="strip-shade"
+          ref={(el) => {
+            shades.current[2 * k] = el;
+          }}
+        />
+      </div>
+      <div className="strip-face strip-under">
+        <div className="strip-page" style={{ left: `calc(var(--pw) * ${-offset(k, 'back')})` }}>
+          {back}
+        </div>
+        <div
+          className="strip-shade"
+          ref={(el) => {
+            shades.current[2 * k + 1] = el;
+          }}
+        />
+      </div>
+      {k + 1 < STRIPS && strip(k + 1)}
+    </div>
+  );
+
+  return (
+    <div className={`leaf ${dir === 1 ? 'leaf-fwd' : 'leaf-back'}`} aria-hidden>
+      {strip(0)}
+    </div>
+  );
 }
 
-function Page({ side, depth, children }: { side: 'left' | 'right' | 'single'; depth?: number; children: ReactNode }) {
-  const shadow = depth && side !== 'single' ? stackShadow(side, depth) : side === 'single' ? '0 2px 0 #e3d4b5, 0 4px 0 #cdbb96, 0 10px 18px -8px rgba(40,20,5,.4)' : undefined;
+/** Страница. Загнутый уголок — её часть: переворачивается вместе с листом и не пропадает. */
+function Page({
+  side,
+  children,
+  onCorner,
+  onCornerKey,
+  cornerLabel,
+}: {
+  side: 'left' | 'right' | 'single';
+  children: ReactNode;
+  onCorner?: (e: React.PointerEvent) => void;
+  onCornerKey?: () => void;
+  cornerLabel?: string;
+}) {
+  const live = Boolean(onCorner);
   return (
-    <div className={`page page-${side}`} style={{ boxShadow: shadow }}>
+    <div className={`page page-${side}`}>
       {children}
+      {side !== 'single' && (
+        <span
+          className={`dog-ear dog-ear-${side === 'left' ? 'l' : 'r'}`}
+          role={live ? 'button' : undefined}
+          tabIndex={live ? 0 : -1}
+          aria-label={live ? cornerLabel : undefined}
+          aria-hidden={live ? undefined : true}
+          title={live ? cornerLabel : undefined}
+          onPointerDown={onCorner}
+          onKeyDown={
+            live && onCornerKey
+              ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onCornerKey();
+                  }
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }
@@ -347,7 +586,7 @@ function PageTitle({ children }: { children: ReactNode }) {
 }
 
 const PageNo = ({ side, n }: { side: 'left' | 'right'; n: number }) => (
-  <span className={`absolute bottom-[3.4%] font-mono text-ink-soft ${side === 'left' ? 'left-[7%]' : 'right-[7%]'}`} style={{ fontSize: 'max(9px, 1.8cqw)' }}>
+  <span className={`absolute bottom-[3.4%] font-mono text-ink-soft ${side === 'left' ? 'left-[13%]' : 'right-[13%]'}`} style={{ fontSize: 'max(9px, 1.8cqw)' }}>
     — {n} —
   </span>
 );
