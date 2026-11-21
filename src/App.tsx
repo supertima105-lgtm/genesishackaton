@@ -10,9 +10,13 @@ import { SystemPage } from './pages/SystemPage';
 function useRoute() {
   const [hash, setHash] = useState(() => location.hash);
   useEffect(() => {
+    let prev = location.hash;
     const f = () => {
+      // листая календарь, остаёмся на месте — книга не должна «прыгать» вверх
+      const stay = prev.startsWith('#/calendar') && location.hash.startsWith('#/calendar');
+      prev = location.hash;
       setHash(location.hash);
-      window.scrollTo(0, 0);
+      if (!stay) window.scrollTo(0, 0);
     };
     window.addEventListener('hashchange', f);
     return () => window.removeEventListener('hashchange', f);
@@ -59,7 +63,7 @@ export function App() {
           </a>
         </nav>
       </header>
-      <main className="sheet mx-auto max-w-7xl px-4 py-8 sm:px-8">
+      <main className={calMatch ? 'mx-auto max-w-7xl px-2 pt-2 sm:px-4' : 'sheet mx-auto max-w-7xl px-4 py-8 sm:px-8'}>
         {newMatch ? (
           <NewDay key={route} initialDate={newMatch[1]} />
         ) : calMatch ? (

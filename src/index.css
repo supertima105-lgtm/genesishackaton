@@ -384,3 +384,504 @@ body {
   outline: 2px solid var(--color-blue);
   outline-offset: 2px;
 }
+
+/* ── книга-календарь: раскрытый дневник на столе ─────────────────── */
+@layer components {
+.book {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  perspective: 2600px;
+  perspective-origin: 50% 40%;
+}
+/* кожаная обложка под страницами, со строчкой по краю */
+.book-cover {
+  position: absolute;
+  inset: -16px -20px -24px;
+  border-radius: 14px;
+  background-color: #5a321a;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='l'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4'/%3E%3CfeColorMatrix values='0 0 0 0 .1 0 0 0 0 .05 0 0 0 0 .02 0 0 0 .35 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23l)'/%3E%3C/svg%3E"),
+    radial-gradient(130% 90% at 50% 0%, rgba(255, 205, 150, 0.16), transparent 60%),
+    linear-gradient(90deg, #42230f, #6a3c1f 18%, #5c3219 46%, #2e170a 50%, #5c3219 54%, #6a3c1f 82%, #42230f);
+  box-shadow: 0 60px 90px -36px rgba(40, 20, 5, 0.75), 0 22px 34px -14px rgba(40, 20, 5, 0.5), inset 0 0 0 3px rgba(0, 0, 0, 0.2),
+    inset 0 2px 0 rgba(255, 220, 170, 0.12);
+}
+.book-cover::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border: 1.5px dashed rgba(240, 205, 150, 0.25);
+  border-radius: 9px;
+}
+
+/* страница: состаренная бумага, всё внутри меряется в cqw — страница масштабируется как картинка */
+.page {
+  position: relative;
+  z-index: 1;
+  aspect-ratio: 0.78;
+  container-type: inline-size;
+  overflow: hidden;
+  background-color: #f6eddb;
+  background-image: radial-gradient(125% 95% at 50% 45%, transparent 58%, rgba(160, 112, 45, 0.17) 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .33 0 0 0 0 .16 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23p)'/%3E%3C/svg%3E");
+}
+.page-left {
+  border-radius: 7px 2px 2px 7px;
+}
+.page-right {
+  border-radius: 2px 7px 7px 2px;
+}
+.page-single {
+  border-radius: 3px 7px 7px 3px;
+}
+/* тень корешка и блик на внешнем крае — поверх содержимого */
+.page::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+.page-left::after {
+  background: linear-gradient(270deg, rgba(60, 36, 10, 0.34) 0, rgba(60, 36, 10, 0.13) 2.6%, transparent 9%),
+    linear-gradient(90deg, rgba(255, 250, 235, 0.35), transparent 5%);
+}
+.page-right::after {
+  background: linear-gradient(90deg, rgba(60, 36, 10, 0.34) 0, rgba(60, 36, 10, 0.13) 2.6%, transparent 9%),
+    linear-gradient(270deg, rgba(255, 250, 235, 0.35), transparent 5%);
+}
+.page-single::after {
+  background: linear-gradient(90deg, rgba(60, 36, 10, 0.2) 0, transparent 5%);
+}
+
+/* перелистываемый лист */
+.leaf {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  z-index: 10;
+  transform-style: preserve-3d;
+  pointer-events: none;
+  animation-duration: var(--flip, 0.9s);
+  animation-timing-function: cubic-bezier(0.62, 0.04, 0.27, 1);
+  animation-fill-mode: forwards;
+}
+.leaf-fwd {
+  left: 50%;
+  transform-origin: 0 50%;
+  animation-name: leaf-fwd;
+}
+.leaf-back {
+  left: 0;
+  transform-origin: 100% 50%;
+  animation-name: leaf-back;
+}
+.leaf-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.leaf-face > .page {
+  height: 100%;
+}
+.leaf-under {
+  transform: rotateY(180deg);
+}
+.leaf-shade {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  animation-duration: var(--flip, 0.9s);
+  animation-fill-mode: forwards;
+}
+.leaf-shade-up {
+  animation-name: shade-up;
+}
+.leaf-shade-down {
+  animation-name: shade-down;
+}
+.leaf-fwd .leaf-shade-up,
+.leaf-back .leaf-shade-down {
+  background: linear-gradient(90deg, rgba(35, 20, 4, 0.5), rgba(35, 20, 4, 0.12) 70%, rgba(35, 20, 4, 0.22));
+}
+.leaf-back .leaf-shade-up,
+.leaf-fwd .leaf-shade-down {
+  background: linear-gradient(270deg, rgba(35, 20, 4, 0.5), rgba(35, 20, 4, 0.12) 70%, rgba(35, 20, 4, 0.22));
+}
+.leaf .hand-ring path {
+  animation: none;
+  stroke-dashoffset: 0;
+}
+/* тень, которую лист отбрасывает на страницы под собой */
+.cast {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  z-index: 9;
+  pointer-events: none;
+  opacity: 0;
+  animation-duration: var(--flip, 0.9s);
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+.cast-r {
+  left: 50%;
+  background: linear-gradient(90deg, rgba(35, 20, 4, 0.45), rgba(35, 20, 4, 0.12) 35%, transparent 75%);
+}
+.cast-l {
+  left: 0;
+  background: linear-gradient(270deg, rgba(35, 20, 4, 0.45), rgba(35, 20, 4, 0.12) 35%, transparent 75%);
+}
+.cast-lift {
+  animation-name: cast-lift;
+}
+.cast-land {
+  animation-name: cast-land;
+}
+
+/* загнутый уголок — за него можно «взять» страницу */
+.dog-ear {
+  position: absolute;
+  bottom: 0;
+  z-index: 15;
+  width: 3.6%;
+  aspect-ratio: 1;
+  cursor: pointer;
+  transition: width 0.3s cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+.dog-ear:hover,
+.dog-ear:focus-visible {
+  width: 6.5%;
+}
+.dog-ear-r {
+  right: 0;
+  border-bottom-right-radius: 7px;
+  background: linear-gradient(to bottom right, #fffaee 0, #efe2c4 38%, #cdb88f 49.5%, transparent 50%),
+    linear-gradient(to top left, #e2d2b0 0, #c9b48b 46%, #b39c72 50%, transparent 50%);
+}
+.dog-ear-l {
+  left: 0;
+  border-bottom-left-radius: 7px;
+  background: linear-gradient(to bottom left, #fffaee 0, #efe2c4 38%, #cdb88f 49.5%, transparent 50%),
+    linear-gradient(to top right, #e2d2b0 0, #c9b48b 46%, #b39c72 50%, transparent 50%);
+}
+
+/* ленточка-закладка */
+.ribbon {
+  position: absolute;
+  left: calc(50% - 38px);
+  bottom: -58px;
+  z-index: 12;
+  filter: drop-shadow(1px 3px 2px rgba(40, 15, 5, 0.4));
+  pointer-events: none;
+}
+.ribbon i {
+  display: block;
+  width: 17px;
+  height: 96px;
+  background: linear-gradient(90deg, #8a2717, #b9472d 40%, #c65739 55%, #95301d);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 89%, 0 100%);
+}
+
+/* полароид на странице */
+.bk-polaroid {
+  position: absolute;
+  z-index: 2;
+  display: block;
+  width: calc(var(--w) * 1cqw);
+  padding: calc(var(--w) * 0.045cqw) calc(var(--w) * 0.045cqw) 0;
+  background: #fffdf7;
+  box-shadow: 0 1.3cqw 2.2cqw -1.1cqw rgba(30, 20, 5, 0.5), 0 0.15cqw 0.4cqw rgba(30, 20, 5, 0.14);
+  transform: translate(-50%, -50%) rotate(var(--r));
+  transition: transform 0.35s cubic-bezier(0.3, 1.35, 0.5, 1), box-shadow 0.35s;
+}
+.bk-polaroid:hover,
+.bk-polaroid:focus-visible {
+  z-index: 8;
+  transform: translate(-50%, -53%) rotate(0deg) scale(1.07);
+  box-shadow: 0 3cqw 4cqw -1.8cqw rgba(30, 20, 5, 0.55), 0 0.2cqw 0.5cqw rgba(30, 20, 5, 0.14);
+}
+.bk-photo {
+  position: relative;
+  aspect-ratio: 1 / 0.9;
+  overflow: hidden;
+}
+.bk-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 35%;
+  filter: sepia(0.22) saturate(0.86) contrast(1.04) brightness(1.02);
+}
+.bk-photo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(155deg, rgba(255, 215, 150, 0.16), transparent 45%, rgba(80, 45, 10, 0.16));
+  box-shadow: inset 0 0 1.4cqw rgba(60, 35, 5, 0.3);
+}
+.bk-cap {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4em;
+  padding: 0.3em 0.15em 0.5em;
+  font-family: var(--font-hand);
+  font-size: max(11px, calc(var(--w) * 0.105cqw));
+  font-weight: 600;
+  line-height: 1.05;
+  color: #2b2620;
+}
+/* полупрозрачный скотч с рваными краями */
+.bk-tape {
+  position: absolute;
+  z-index: 3;
+  top: calc(var(--w) * -0.055cqw);
+  left: 50%;
+  width: 46%;
+  height: calc(var(--w) * 0.11cqw);
+  background: var(--tc);
+  mix-blend-mode: multiply;
+  transform: translateX(-50%) rotate(var(--tr));
+  clip-path: polygon(2% 0, 98% 6%, 100% 28%, 97% 52%, 100% 78%, 98% 100%, 1% 95%, 3% 72%, 0 48%, 2.5% 22%);
+  pointer-events: none;
+}
+/* крафтовая карточка «песня месяца» */
+.kraft {
+  position: absolute;
+  z-index: 3;
+  display: block;
+  background-color: #cfac80;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='k'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .22 0 0 0 0 .08 0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23k)'/%3E%3C/svg%3E"),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.2), transparent 50%, rgba(90, 55, 20, 0.14));
+  color: #3a2817;
+  box-shadow: 0 1.3cqw 2.2cqw -1.1cqw rgba(30, 20, 5, 0.5);
+  transform: rotate(var(--r));
+  transition: transform 0.35s cubic-bezier(0.3, 1.35, 0.5, 1);
+}
+.kraft:hover,
+.kraft:focus-visible {
+  transform: rotate(0deg) translateY(-0.5cqw) scale(1.03);
+}
+/* почтовая марка дня в сетке: фото с перфорацией по краю */
+.stamp-wrap {
+  position: absolute;
+  right: 8%;
+  bottom: 8%;
+  width: 64%;
+  filter: drop-shadow(0 1px 1.4px rgba(40, 25, 5, 0.45));
+  transform: rotate(var(--r));
+  transition: transform 0.3s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.stamp-behind {
+  translate: -18% -10%;
+  opacity: 0.95;
+}
+.stamp-mini {
+  --s: max(2px, 0.42cqw);
+  position: relative;
+  display: block;
+  aspect-ratio: 0.84;
+  padding: calc(var(--s) * 1.6);
+  background: #fffdf6;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, radial-gradient(var(--s) at var(--s) var(--s), #0000 97%, #000) calc(-1 * var(--s)) calc(-1 * var(--s)) / calc(var(--s) * 2) calc(var(--s) * 2) round;
+  mask: linear-gradient(#000 0 0) content-box, radial-gradient(var(--s) at var(--s) var(--s), #0000 97%, #000) calc(-1 * var(--s)) calc(-1 * var(--s)) / calc(var(--s) * 2) calc(var(--s) * 2) round;
+}
+.stamp-mini > span {
+  position: relative;
+  display: block;
+  height: 100%;
+  overflow: hidden;
+}
+.stamp-mini img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: sepia(0.25) saturate(0.85) contrast(1.05);
+}
+/* волнистое гашение поверх марки */
+.postmark {
+  position: absolute;
+  left: -30%;
+  top: 18%;
+  width: 90%;
+  color: rgba(43, 38, 32, 0.45);
+  pointer-events: none;
+}
+.cell-day:hover .stamp-wrap,
+.cell-day:focus-visible .stamp-wrap {
+  transform: rotate(0deg) scale(1.12);
+}
+/* акварельное пятно в цвет дня — по сетке сразу видно, каким был месяц */
+.wash {
+  position: absolute;
+  inset: 7% 5% 9%;
+  border-radius: 46% 54% 42% 58% / 55% 45% 55% 45%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--c) 34%, transparent), color-mix(in srgb, var(--c) 16%, transparent) 72%, transparent);
+  filter: blur(0.6px);
+  transform: rotate(var(--r));
+  pointer-events: none;
+}
+/* при наведении над маркой всплывает фото дня с подписью */
+.peek {
+  position: absolute;
+  bottom: calc(100% + 0.6cqw);
+  left: 50%;
+  z-index: 40;
+  width: 21cqw;
+  padding: 0.8cqw 0.8cqw 2.6cqw;
+  background: #fffdf7;
+  box-shadow: 0 2cqw 3cqw -1.4cqw rgba(30, 20, 5, 0.55);
+  opacity: 0;
+  transform: translate(-50%, 1.2cqw) rotate(-4deg) scale(0.92);
+  transition: opacity 0.2s, transform 0.3s cubic-bezier(0.3, 1.35, 0.5, 1);
+  pointer-events: none;
+}
+.cell-day:hover .peek,
+.cell-day:focus-visible .peek {
+  opacity: 1;
+  transform: translate(-50%, 0) rotate(-3deg) scale(1);
+}
+/* у верхней строки сетки фото всплывает вниз, чтобы не упереться в край страницы */
+.peek.peek-down {
+  top: calc(100% + 0.6cqw);
+  bottom: auto;
+  transform: translate(-50%, -1.2cqw) rotate(3deg) scale(0.92);
+}
+.cell-day:hover .peek.peek-down,
+.cell-day:focus-visible .peek.peek-down {
+  transform: translate(-50%, 0) rotate(2deg) scale(1);
+}
+/* катушки кассеты крутятся, когда на неё наводишь */
+.reel {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.kraft:hover .reel {
+  animation: vinyl-spin 2.2s linear infinite;
+}
+/* обводка маркером вокруг сегодняшнего дня */
+.hand-ring {
+  position: absolute;
+  inset: -7% -5%;
+  z-index: 4;
+  overflow: visible;
+  pointer-events: none;
+}
+.hand-ring path {
+  fill: none;
+  stroke: #3f8a52;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0.85;
+  animation: draw-in 1.1s 0.5s cubic-bezier(0.5, 0, 0.3, 1) forwards;
+}
+/* строка оглавления — подсвечивается маркером */
+.toc-row {
+  background-image: linear-gradient(transparent 52%, rgba(255, 228, 110, 0.55) 52% 86%, transparent 86%);
+  background-repeat: no-repeat;
+  background-size: 0% 100%;
+  transition: background-size 0.35s ease;
+}
+.toc-row:hover,
+.toc-row:focus-visible {
+  background-size: 100% 100%;
+}
+.page-swap-next {
+  animation: swap-next 0.5s cubic-bezier(0.3, 0.7, 0.3, 1) both;
+}
+.page-swap-prev {
+  animation: swap-prev 0.5s cubic-bezier(0.3, 0.7, 0.3, 1) both;
+}
+}
+
+@keyframes leaf-fwd {
+  from {
+    transform: translateZ(1px) rotateY(0deg);
+  }
+  to {
+    transform: translateZ(1px) rotateY(-180deg);
+  }
+}
+@keyframes leaf-back {
+  from {
+    transform: translateZ(1px) rotateY(0deg);
+  }
+  to {
+    transform: translateZ(1px) rotateY(180deg);
+  }
+}
+@keyframes shade-up {
+  0% {
+    opacity: 0;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes shade-down {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes cast-lift {
+  0% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 0.2;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes cast-land {
+  0%,
+  45% {
+    opacity: 0;
+  }
+  85% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes draw-in {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes swap-next {
+  from {
+    opacity: 0;
+    transform: translateX(7%) rotate(1.2deg);
+  }
+}
+@keyframes swap-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-7%) rotate(-1.2deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hand-ring path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .page-swap-next,
+  .page-swap-prev {
+    animation: none;
+  }
+}
