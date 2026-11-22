@@ -15,6 +15,10 @@
       if (location.protocol === 'file:' && !/\/docs\/index\.html$/i.test(location.pathname)) {
         location.replace('docs/index.html' + location.hash);
       }
+      // GitHub Pages публикует корень репозитория: собранный сайт лежит в docs/
+      if (/\.github\.io$/i.test(location.hostname) && !/\/docs\//i.test(location.pathname)) {
+        location.replace(location.pathname.replace(/\/?(index\.html)?$/i, '/') + 'docs/' + location.hash);
+      }
     </script>
   </head>
   <body>
