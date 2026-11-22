@@ -1,19 +1,22 @@
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { store } from '../lib/storage';
+import { freshCover } from '../components/memory/layout';
 import { formatDate, MemoryCard } from '../components/memory/MemoryCard';
 import { AXES } from '../components/WhyPanel';
 import { CAPTION_RU, dayDistance, FRAME_RU, mostContrasting, SHAPES_RU, treatment } from '../lib/rules/labels';
+import { emotionOf, EMOTIONS } from '../lib/rules/emotion';
 import { MODES } from '../lib/rules/modes';
 import type { DayRecord } from '../lib/types';
 import { numberDays, plural, useDays, useFileUrls } from '../lib/useDays';
 import { weatherShort } from '../lib/weather';
 
 const SAME = [
-  'формат 4:5 и поля',
+  'лист в формате своего фото, поля',
   'шапка: дата, день недели, номер страницы',
-  'название — Cormorant Garamond на высоте 72%',
+  'название сразу под фото',
   'подвал: песня, темп, почерк дня',
-  'фактура бумаги',
   'один и тот же шейдер',
 ];
 
@@ -47,11 +50,14 @@ export function ComparePage({ a, b }: { a?: string; b?: string }) {
   };
 
   const rows: [string, (d: DayRecord) => ReactNode][] = [
+    ['настроение', (d) => EMOTIONS[emotionOf(d).id].name],
+    ['бумага', (d) => EMOTIONS[emotionOf(d).id].material],
+    ['название', (d) => EMOTIONS[emotionOf(d).id].font],
     ['почерк', (d) => `${MODES[d.style.mode].name} + ${MODES[d.style.secondary].name} ${Math.round(d.style.blend * 100)}%`],
     ['окно фото', (d) => FRAME_RU[d.style.layout.frame]],
     ['обработка', (d) => treatment(d.style.shader)],
     ['графика', (d) => SHAPES_RU[d.style.shapes.kind]],
-    ['подпись', (d) => CAPTION_RU[d.style.type.caption]],
+    ['подпись', (d) => EMOTIONS[emotionOf(d).id].caption ?? CAPTION_RU[d.style.type.caption]],
     ['песня', (d) => `${Math.round(d.style.motion.bpm)} BPM · ${d.signals.music.mode === 'major' ? 'мажор' : 'минор'}`],
     ['погода', (d) => (d.signals.weather ? weatherShort(d.signals.weather) : '—')],
     [
@@ -67,16 +73,18 @@ export function ComparePage({ a, b }: { a?: string; b?: string }) {
   ];
 
   return (
-    <section>
+    // уезжающая в сторону карточка не должна давать горизонтальную прокрутку
+    <section className="overflow-x-clip">
       <h1 className="font-hand text-5xl leading-none font-bold text-blue">Один дневник — два настроения</h1>
 
       <div className="mt-8 grid gap-8 md:grid-cols-2">
         {([A, B] as const).map((d, side) => (
           <Side
-            key={`${side}-${d.id}`}
+            key={side}
+            side={side as 0 | 1}
             letter={side ? 'Б' : 'А'}
             day={d}
-            number={numbers.get(d.id) ?? 0}
+            numbers={numbers}
             days={days}
             exclude={side === 0 ? B.id : A.id}
             onSelect={(id) => select(side as 0 | 1, id)}
@@ -144,22 +152,53 @@ export function ComparePage({ a, b }: { a?: string; b?: string }) {
   );
 }
 
+/** Что нужно карточке, чтобы лечь на стол сразу целиком: обложка (снимок шейдера) или фото дня. */
+interface CardSrc {
+  day: DayRecord;
+  cover?: string;
+  photos: string[];
+}
+
+/** Файлы дня готовы и картинка уже декодирована — только тогда новая карточка заменяет старую. */
+function useCardSrc(day: DayRecord): CardSrc | null {
+  const [src, setSrc] = useState<CardSrc | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const cover = freshCover(day);
+    const refs = cover ? [cover] : day.photos;
+    Promise.all(refs.map((r) => store.fileUrl(r)))
+      .then(async (urls) => {
+        const img = new Image();
+        img.src = urls[0] ?? '';
+        await img.decode().catch(() => {});
+        if (alive) setSrc(cover ? { day, cover: urls[0], photos: [] } : { day, photos: urls });
+      })
+      .catch(() => alive && setSrc({ day, photos: [] }));
+    return () => {
+      alive = false;
+    };
+  }, [day]);
+  return src;
+}
+
 function Side({
   day,
-  number,
+  side,
+  numbers,
   days,
   exclude,
   onSelect,
   letter,
 }: {
   letter: string;
+  side: 0 | 1;
   day: DayRecord;
-  number: number;
+  numbers: Map<string, number>;
   days: DayRecord[];
   exclude: string;
   onSelect: (id: string) => void;
 }) {
-  const photoUrls = useFileUrls(day.photos);
+  const src = useCardSrc(day);
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const thumb = useFileUrls(day.cover ? [day.cover] : day.photos.slice(0, 1))?.[0];
@@ -215,11 +254,25 @@ function Side({
           />
         )}
       </div>
-      {photoUrls && photoUrls.length > 0 ? (
-        <MemoryCard day={day} number={number} photoUrls={photoUrls} live />
-      ) : (
-        <div className="aspect-[4/5] w-full" style={{ background: day.style.palette.paper }} />
-      )}
+      {/* выбрали другой день: прежняя карточка уезжает в сторону, новая ложится на её место */}
+      <div className="relative">
+        <AnimatePresence initial={false} mode="popLayout">
+          {src ? (
+            <motion.div
+              key={src.day.id}
+              className="shadow-[0_18px_34px_-18px_rgba(40,25,5,.55)]"
+              initial={{ opacity: 0, y: -28, rotate: side ? 3 : -3, scale: 1.03 }}
+              animate={{ opacity: 1, y: 0, rotate: 0, scale: 1 }}
+              exit={{ opacity: 0, x: side ? 90 : -90, y: 14, rotate: side ? 7 : -7, scale: 0.96 }}
+              transition={{ duration: 0.6, ease: [0.2, 0.7, 0.2, 1] }}
+            >
+              <MemoryCard day={src.day} number={numbers.get(src.day.id) ?? 0} photoUrls={src.photos} coverUrl={src.cover} live={!src.cover && src.photos.length > 0} />
+            </motion.div>
+          ) : (
+            <div className="aspect-[4/5] w-full" style={{ background: day.style.palette.paper }} />
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

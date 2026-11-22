@@ -1,17 +1,23 @@
 import { BookOpen, Clapperboard, Columns2, Search } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { AddToFolder, DropDock, FolderShelf } from '../components/Folders';
+import { freshCover } from '../components/memory/layout';
 import { formatDate, MemoryCard } from '../components/memory/MemoryCard';
-import { Quilt } from '../components/Quilt';
+import { Pinboard, PinnedCard } from '../components/Pinboard';
 import { exportExamples, hasExamples, importExamples } from '../lib/examples';
+import { useFolders } from '../lib/shelf';
 import { store } from '../lib/storage';
-import { thumbCached, thumbUrl } from '../lib/thumb';
+import { accountsOn } from '../lib/supabase';
 import type { DayRecord } from '../lib/types';
 import { numberDays, plural, useDays, useFileUrls } from '../lib/useDays';
 
 export function Archive() {
   const { days, error } = useDays();
+  const folderList = useFolders() ?? [];
   const [q, setQ] = useState('');
+  const [dragging, setDragging] = useState<string | null>(null);
   const numbers = useMemo(() => numberDays(days ?? []), [days]);
+  const byId = useMemo(() => new Map((days ?? []).map((d) => [d.id, d])), [days]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -45,7 +51,17 @@ export function Archive() {
           </a>
           <ExamplesButton />
         </div>
-        <p className="label mt-6">хранилище: {store.kind === 'supabase' ? 'Supabase' : 'этот браузер (IndexedDB)'}</p>
+        <p className="label mt-6">
+          хранилище: {store.kind === 'supabase' ? 'ваш аккаунт' : 'этот браузер (IndexedDB)'}
+          {accountsOn && store.kind === 'local' && (
+            <>
+              {' · '}
+              <a href="#/settings" className="underline">
+                войти, чтобы хранить в облаке
+              </a>
+            </>
+          )}
+        </p>
       </section>
     );
 
@@ -55,7 +71,7 @@ export function Archive() {
         <div>
           <h1 className="font-hand text-5xl leading-none font-bold text-blue">Былые дни</h1>
           <p className="label mt-1">
-            {days.length} {plural(days.length, 'страница', 'страницы', 'страниц')} · хранилище: {store.kind === 'supabase' ? 'Supabase' : 'этот браузер'}
+            {days.length} {plural(days.length, 'страница', 'страницы', 'страниц')} · хранилище: {store.kind === 'supabase' ? 'ваш аккаунт' : 'этот браузер'}
           </p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
@@ -77,76 +93,22 @@ export function Archive() {
       </div>
 
       {!q && <OnThisDay days={days} numbers={numbers} />}
-      {!q && <Quilt days={days} />}
+      {!q && <FolderShelf list={folderList} byId={byId} />}
 
       {groups.map(([month, list]) => (
         <div key={month} className="mb-12">
           <h2 className="mb-6 font-hand text-3xl font-bold text-ink-soft">{month}</h2>
-          <div className="grid grid-cols-2 gap-x-5 gap-y-9 sm:gap-x-8 md:grid-cols-3 xl:grid-cols-4">
+          <Pinboard>
             {list.map((d, i) => (
-              <ArchiveCard key={d.id} day={d} number={numbers.get(d.id) ?? 0} index={i} />
+              <PinnedCard key={d.id} day={d} number={numbers.get(d.id) ?? 0} index={i} onDrag={setDragging} extra={<AddToFolder day={d} list={folderList} />} />
             ))}
-          </div>
+          </Pinboard>
         </div>
       ))}
       {filtered.length === 0 && <p className="label">Ничего не нашлось.</p>}
       {import.meta.env.DEV && <DevExport />}
+      <DropDock active={Boolean(dragging)} list={folderList} byId={byId} />
     </section>
-  );
-}
-
-const TILTS = [-2.4, 1.8, -1.2, 2.2, -1.8, 1.1];
-
-/** Карточка дорисовывается, только когда до неё почти доскроллили: год из 300+ дней не строится разом. */
-function useNear<T extends Element>() {
-  const ref = useRef<T>(null);
-  const [near, setNear] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || near) return;
-    const io = new IntersectionObserver(([e]) => e.isIntersecting && setNear(true), { rootMargin: '900px 0px' });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [near]);
-  return [ref, near] as const;
-}
-
-/** Уменьшенная копия обложки (или первого фото) — карточке в 300 px не нужно фото в 1600. */
-function useCardImage(day: DayRecord, on: boolean) {
-  const ref = day.cover ?? day.photos[0];
-  const [url, setUrl] = useState(() => thumbCached(ref, 640));
-  useEffect(() => {
-    if (!on || !ref || url) return;
-    let alive = true;
-    thumbUrl(ref, 640).then((u) => alive && setUrl(u));
-    return () => {
-      alive = false;
-    };
-  }, [on, ref, url]);
-  return url;
-}
-
-/** День в архиве — полароид на кнопке, у каждого свой наклон. */
-function ArchiveCard({ day, number, index }: { day: DayRecord; number: number; index: number }) {
-  const [box, near] = useNear<HTMLAnchorElement>();
-  const src = useCardImage(day, near);
-  return (
-    <a ref={box} href={`#/day/${encodeURIComponent(day.id)}`} className="group block">
-      <div
-        className="polaroid pin rotate-(--tilt) pb-3 transition-transform duration-300 group-hover:-translate-y-1 group-hover:rotate-0"
-        style={{ '--tilt': `${TILTS[index % TILTS.length]}deg` } as CSSProperties}
-      >
-        {near ? (
-          <MemoryCard day={day} number={number} photoUrls={src && !day.cover ? [src] : []} coverUrl={day.cover ? src : undefined} />
-        ) : (
-          <div className="w-full" style={{ aspectRatio: '4 / 5', background: day.style.palette.paper }} />
-        )}
-        <div className="mt-2 flex items-baseline justify-between gap-2">
-          <span className="truncate font-hand text-[22px] leading-tight">{day.title}</span>
-          <span className="label shrink-0">{formatDate(day.date).short}</span>
-        </div>
-      </div>
-    </a>
   );
 }
 
@@ -222,7 +184,8 @@ function OnThisDay({ days, numbers }: { days: DayRecord[]; numbers: Map<string, 
       });
   const day = [...near].sort((a, b) => b.date.localeCompare(a.date))[0];
   const latest = [...days].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))[0];
-  const cover = useFileUrls(day?.cover ? [day.cover] : undefined);
+  const fresh = day && freshCover(day);
+  const cover = useFileUrls(fresh ? [fresh] : undefined);
   const first = useFileUrls(day ? day.photos.slice(0, 1) : undefined);
   if (!day) return null;
 

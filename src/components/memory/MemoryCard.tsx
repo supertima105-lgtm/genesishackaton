@@ -1,8 +1,11 @@
 import type { CSSProperties } from 'react';
 import { MODES } from '../../lib/rules/modes';
+import { songArtist } from '../../lib/songCover';
+import { useDayAspect } from '../../lib/aspect';
 import type { DayRecord } from '../../lib/types';
 import { weatherShort } from '../../lib/weather';
-import { FRAMES, TITLE_TOP } from './layout';
+import { FOOT_BOTTOM, FOOT_GAP, frameOf, HEAD_TOP, RULE_TOP, TEXT_GAP, TEXT_MIN } from './layout';
+import { captionLook, Jitter, Marks, paperOf, PaperLayer, photoTilt, TitleMark, titleLook, useEmotion, WindowDetails } from './Material';
 import { PhotoLayer } from './PhotoLayer';
 import { Shapes } from './Shapes';
 import { WeatherLayer } from './WeatherLayer';
@@ -35,76 +38,88 @@ export function formatDate(iso: string) {
 }
 
 /**
- * Страница дневника. Постоянные элементы: формат 4:5, шапка с датой и номером,
- * блок названия на одной высоте, подвал с песней, бумага. Переменные: окно фото,
- * обработка, графический слой, шрифт подписи. Страница неподвижна.
+ * Страница дневника. Постоянные элементы: шапка с датой и номером, название под фото, подвал
+ * с песней, бумага. Окно фото повторяет формат снимка и занимает почти весь лист — лист
+ * вырастает под ним (горизонтальный кадр — низкий лист, вертикальный — высокий).
+ * Переменные: посадка окна, обработка, графический слой — от почерка кадра; бумага, почерк
+ * названия, крепление снимка и следы на листе — от настроения дня (Material.tsx). Страница неподвижна.
  */
 export function MemoryCard({ day, number, photoUrls, coverUrl, live, onCover, coverKey }: Props) {
   const { style } = day;
-  const { paper, ink } = style.palette;
-  const f = FRAMES[style.layout.frame];
+  const { ink } = style.palette;
+  const emo = useEmotion(day);
+  const paper = paperOf(emo.id, style.palette);
+  const aspect = useDayAspect(day);
+  const f = frameOf(style.layout.frame, aspect);
   const date = formatDate(day.date);
   const mode = MODES[style.mode];
   const stillSrc = coverUrl ?? photoUrls[0];
+  const title = titleLook(emo, style.palette);
+  const tilt = (f.rotate ?? 0) + photoTilt(emo, style.shapes.seed);
+  const lifted = style.layout.frame === 'tilted' || emo.id === 'tense';
 
   return (
-    <div
-      className="memory-card relative w-full overflow-hidden select-none"
-      style={{ aspectRatio: '4 / 5', background: paper, color: ink, containerType: 'inline-size' } as CSSProperties}
-    >
-      {/* окно фото */}
-      <div
-        className="absolute overflow-hidden"
-        style={{
-          left: `${f.x}%`,
-          top: `${f.y}%`,
-          width: `${f.w}%`,
-          height: `${f.h}%`,
-          transform: f.rotate ? `rotate(${f.rotate}deg)` : undefined,
-          boxShadow: style.layout.frame === 'tilted' ? '0 1.2cqw 3cqw rgba(0,0,0,.22)' : undefined,
-          background: paper,
-        }}
-      >
-        {live && photoUrls[0] ? (
-          <PhotoLayer url={photoUrls[0]} style={style} seed={style.shapes.seed} onCover={onCover} coverKey={coverKey} />
-        ) : stillSrc ? (
-          <img src={stillSrc} alt="" className="h-full w-full object-cover" style={{ filter: coverUrl ? undefined : cssApprox(day) }} draggable={false} />
-        ) : null}
-        <WeatherLayer weather={style.weather} animate={false} />
-      </div>
+    <div className="memory-card relative w-full overflow-hidden select-none" style={{ background: paper, color: ink, containerType: 'inline-size' } as CSSProperties}>
+      <PaperLayer e={emo} style={style} frame={f} />
+      <div className="relative" style={{ paddingTop: `${f.top}cqw`, paddingBottom: `${FOOT_BOTTOM}cqw` }}>
+        {/* окно фото — в формате снимка */}
+        <div
+          className="relative overflow-hidden"
+          style={{
+            marginLeft: `${f.x}cqw`,
+            width: `${f.w}cqw`,
+            height: `${f.h}cqw`,
+            transform: tilt ? `rotate(${tilt}deg)` : undefined,
+            boxShadow: lifted ? '0 1.2cqw 3cqw rgba(0,0,0,.22)' : undefined,
+            background: paper,
+          }}
+        >
+          {live && photoUrls[0] ? (
+            <PhotoLayer url={photoUrls[0]} style={style} seed={style.shapes.seed} onCover={onCover} coverKey={coverKey} />
+          ) : stillSrc ? (
+            <img src={stillSrc} alt="" className="h-full w-full object-cover" style={{ filter: coverUrl ? undefined : cssApprox(day) }} draggable={false} />
+          ) : null}
+          <WeatherLayer weather={style.weather} animate={false} />
+          <WindowDetails e={emo} style={style} frame={f} paper={paper} />
+        </div>
 
-      <Shapes style={style} number={number} />
+        <Shapes style={style} number={number} frame={f} />
 
-      {/* шапка — постоянная */}
-      <div
-        className="absolute flex items-baseline justify-between"
-        style={{ left: '7%', right: '7%', top: '3.4%', fontFamily: '"JetBrains Mono", monospace', fontSize: '2cqw', letterSpacing: '0.12em', textTransform: 'uppercase' }}
-      >
-        <span>
-          {date.short} · {date.weekday}
-        </span>
-        <span>№ {String(number).padStart(3, '0')}</span>
-      </div>
-      <div className="absolute" style={{ left: '7%', right: '7%', top: '6.6%', height: 1, background: ink, opacity: 0.25 }} />
+        {/* шапка — постоянная */}
+        <div
+          className="absolute flex items-baseline justify-between"
+          style={{ left: '7cqw', right: '7cqw', top: `${HEAD_TOP}cqw`, fontFamily: '"JetBrains Mono", monospace', fontSize: '2cqw', letterSpacing: '0.12em', textTransform: 'uppercase' }}
+        >
+          <span>
+            {date.short} · {date.weekday}
+          </span>
+          <span>№ {String(number).padStart(3, '0')}</span>
+        </div>
+        <div className="absolute" style={{ left: '7cqw', right: '7cqw', top: `${RULE_TOP}cqw`, height: 1, background: ink, opacity: 0.25 }} />
 
-      {/* название и подпись — постоянная позиция */}
-      <div className="absolute" style={{ left: '7%', right: style.shapes.kind === 'enso' ? '17%' : '7%', top: `${TITLE_TOP}%` }}>
-        <h2 style={{ fontFamily: '"Cormorant Garamond", serif', fontWeight: 500, fontSize: '6.3cqw', lineHeight: 1.02, letterSpacing: '-0.01em' }}>{day.title}</h2>
-        <p style={{ ...CAPTION_FONT[style.type.caption], marginTop: '1.6cqw' }}>{day.signals.text.caption}</p>
-      </div>
+        {/* название и подпись — сразу под фото */}
+        <div className="relative" style={{ margin: `${TEXT_GAP}cqw 7cqw 0`, minHeight: `${TEXT_MIN}cqw` }}>
+          <h2 className="relative" style={title.css}>
+            {title.jitter ? <Jitter text={day.title} seed={style.shapes.seed} rot={title.jitter[0]} dy={title.jitter[1]} /> : day.title}
+            <TitleMark e={emo} p={style.palette} seed={style.shapes.seed} />
+          </h2>
+          <p style={{ ...(captionLook(emo, style.palette) ?? CAPTION_FONT[style.type.caption]), marginTop: '1.6cqw' }}>{day.signals.text.caption}</p>
+        </div>
 
-      {/* подвал — постоянный */}
-      <div
-        className="absolute flex items-baseline justify-between gap-4"
-        style={{ left: '7%', right: '7%', bottom: '3.4%', fontFamily: '"JetBrains Mono", monospace', fontSize: '1.75cqw', letterSpacing: '0.08em', textTransform: 'uppercase' }}
-      >
-        <span className="truncate">
-          ♪ {day.song.artist} — {day.song.title}
-        </span>
-        <span className="shrink-0 opacity-70">
-          {day.signals.weather ? `${weatherShort(day.signals.weather)} · ` : ''}
-          {Math.round(style.motion.bpm)} bpm · {mode.name}
-        </span>
+        {/* подвал — постоянный */}
+        <div
+          className="relative flex items-baseline justify-between gap-4"
+          style={{ margin: `${FOOT_GAP}cqw 7cqw 0`, fontFamily: '"JetBrains Mono", monospace', fontSize: '1.75cqw', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+        >
+          <span className="truncate">
+            ♪ {songArtist(day.song) ? `${songArtist(day.song)} — ` : ''}
+            {day.song.title}
+          </span>
+          <span className="shrink-0 opacity-70">
+            {day.signals.weather ? `${weatherShort(day.signals.weather)} · ` : ''}
+            {Math.round(style.motion.bpm)} bpm · {mode.name}
+          </span>
+        </div>
       </div>
 
       {/* одна общая текстура на все карточки: SVG-фильтр шума на каждой карточке тормозил архив */}
@@ -112,6 +127,7 @@ export function MemoryCard({ day, number, photoUrls, coverUrl, live, onCover, co
         className="pointer-events-none absolute inset-0"
         style={{ backgroundImage: `url(${paperGrain()})`, backgroundSize: '160px', mixBlendMode: style.palette.dark ? 'screen' : 'multiply', opacity: style.palette.dark ? 0.06 : 0.12 }}
       />
+      <Marks e={emo} style={style} frame={f} />
     </div>
   );
 }

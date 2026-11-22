@@ -5,15 +5,17 @@ export const FRAME_RU: Record<StyleParams['layout']['frame'], string> = {
   window: 'большое окно',
   offset: 'смещённое окно',
   band: 'плёночная лента во всю ширину',
-  small: 'маленькое окно, много воздуха',
+  small: 'окно с широкими полями, больше бумаги вокруг',
   tilted: 'наклонённый вырезанный кадр',
 };
+/** Геометрия, энсо и вырезки больше не рисуются — у старых дней на их месте пусто. */
 export const SHAPES_RU: Record<StyleParams['shapes']['kind'], string> = {
   strokes: 'мазки за краем фото',
-  geometry: 'круги и линии Кандинского',
+  geometry: '—',
   leaks: 'перфорация и засветка',
-  enso: 'энсо и красная печать',
-  cutouts: 'вырезки Матисса',
+  enso: '—',
+  cutouts: '—',
+  none: '—',
 };
 export const CAPTION_RU: Record<StyleParams['type']['caption'], string> = {
   hand: 'рукописный (Caveat)',
@@ -32,6 +34,7 @@ export function treatment(s: StyleParams['shader']): string {
   if (s.halation > 0.25) t.push('ореол');
   if (s.fade > 0.2) t.push('выцветание');
   if (s.aberration > 0.3) t.push('аберрация');
+  if ((s.ripple ?? 0) > 0.2) t.push('волны');
   return t.join(', ') || 'почти без обработки';
 }
 

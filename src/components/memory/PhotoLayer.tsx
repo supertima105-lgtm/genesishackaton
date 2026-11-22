@@ -2,6 +2,7 @@ import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
 import { Suspense, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { hexToVec3 } from '../../lib/color';
+import { MODES } from '../../lib/rules/modes';
 import type { ModeId, StyleParams } from '../../lib/types';
 import { fragmentShader, vertexShader } from './shaders';
 
@@ -24,6 +25,9 @@ export function PhotoLayer(props: Props) {
       frameloop="demand"
       dpr={[1, 2]}
       gl={{ preserveDrawingBuffer: true, antialias: false, alpha: false }}
+      // размер окна без учёта поворота: у наклонённого отпечатка рамка-описанник больше окна,
+      // и холст по ней вылезал за окно — фото обрезалось по краю
+      resize={{ offsetSize: true }}
       style={{ position: 'absolute', inset: 0 }}
     >
       <Suspense fallback={null}>
@@ -33,7 +37,8 @@ export function PhotoLayer(props: Props) {
   );
 }
 
-const EDGE: Record<ModeId, number> = { impression: 1, ma: 0.8, film: 0, kandinsky: 0, collage: 0 };
+/** Рваный край кадра — у каждого режима свой (акварель растекается сильнее всех). */
+const edgeOf = (mode: ModeId) => MODES[mode]?.edge ?? 0;
 
 function makeUniforms() {
   const f = (v = 0) => ({ value: v });
@@ -118,7 +123,8 @@ function Plane({ url, style, seed, onCover, coverKey = 0 }: Props) {
     u.uHalation.value = s.halation;
     u.uAberration.value = s.aberration;
     u.uFade.value = s.fade;
-    u.uEdge.value = EDGE[style.mode];
+    u.uEdge.value = edgeOf(style.mode);
+    u.uRipple.value = s.ripple ?? 0;
     u.uSeed.value = (seed % 1000) / 37;
     (u.uPaper.value as THREE.Color).setRGB(...hexToVec3(style.palette.paper));
     (u.uInk.value as THREE.Color).setRGB(...hexToVec3(style.palette.ink));

@@ -612,6 +612,62 @@ export async function seedYear(year = 2026) {
   return n;
 }
 
+/**
+ * Только в dev: window.__seedShowcase() — пять демо-дней для сдачи, непохожих по чувству:
+ * восторг (море), тревога (ночь перед экзаменом), грусть (проводы), ностальгия (бабушкин рецепт), радость (концерт).
+ * Треки синтетические (свои, без авторских прав), «фото» нарисованы на canvas.
+ */
+export async function seedShowcase(only?: string[]) {
+  const days = [
+    {
+      date: '2026-11-02',
+      text: 'Сорвались на море на один день, без плана. Ветер сбивал с ног, волны огромные, на пляже ни души. Бегали вдоль воды, кричали в ветер и смеялись как сумасшедшие. Соль на губах, щёки горят. Свобода!',
+      photos: [await photo(S.sea, 21, 'sea1.jpg'), await photo(S.sea, 33, 'sea2.jpg')],
+      artist: 'Атмосфера',
+      title: 'Ветер с моря',
+      audio: await track(108, false, 0.75),
+    },
+    {
+      date: '2026-11-07',
+      text: 'Экзамен через час, сижу в коридоре универа под лампами и листаю конспект, а буквы прыгают. Половину билетов не знаю. Сердце колотится, пальцы дрожат, вокруг все шепчут ответы. Паника и злость на себя.',
+      photos: [await photo(S.exam, 14, 'ex1.jpg'), await photo(S.exam, 27, 'ex2.jpg')],
+      artist: 'Атмосфера',
+      title: 'Пятый кофе',
+      audio: await track(146, true, 0.95),
+    },
+    {
+      date: '2026-11-11',
+      text: 'Проводил лучшего друга в аэропорт: он улетает жить в другую страну. Долго стояли у стойки, шутили через силу. Обнялись, он ушёл за стекло и не обернулся. Ехал домой в пустом автобусе, за окном серый дождь.',
+      photos: [await photo(S.airport, 5, 'air1.jpg')],
+      artist: 'Атмосфера',
+      title: 'Пустой автобус',
+      audio: await track(62, true, 0.1),
+    },
+    {
+      date: '2026-11-16',
+      text: 'Пекли с мамой пирожки по бабушкиному рецепту из старой тетради. Вся кухня в муке, пахнет корицей и печкой, как в детстве у бабушки. Мама рассказывала, какой была маленькой, и показывала старые фотографии.',
+      photos: [await photo(S.baking, 9, 'bake1.jpg'), await photo(S.baking, 41, 'bake2.jpg')],
+      artist: 'Атмосфера',
+      title: 'Бабушкина тетрадь',
+      audio: await track(84, false, 0.3),
+    },
+    {
+      date: '2026-11-20',
+      text: 'Городской фестиваль днём на площади! Солнце, толпа, конфетти, уличная группа играет, все танцуют и поют хором. Ели сахарную вату, прыгали с друзьями до упаду. Счастье и смех весь день.',
+      photos: [await photo(party, 17, 'fest1.jpg'), await photo(party, 29, 'fest2.jpg'), await photo(party, 3, 'fest3.jpg')],
+      artist: 'Атмосфера',
+      title: 'Весь зал поёт',
+      audio: await track(128, false, 0.95),
+    },
+  ];
+  const out = [];
+  for (const d of days.filter((x) => !only || only.includes(x.date))) {
+    const day = await createDay(d, (s) => console.log(`[showcase] ${s.label}: ${s.status} ${s.detail ?? ''}`));
+    out.push(`${day.title} → ${day.style.mode}`);
+  }
+  return out;
+}
+
 export async function seedDemo() {
   const days = [
     {

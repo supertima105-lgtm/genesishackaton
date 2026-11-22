@@ -4,10 +4,14 @@ import { formatDate, MemoryCard } from '../components/memory/MemoryCard';
 import { SongPlayer } from '../components/SongPlayer';
 import { StepList } from '../components/StepList';
 import { WhyPanel } from '../components/WhyPanel';
+import { freshCover, sheetRatio } from '../components/memory/layout';
+import { Fastener, handOf, useEmotion } from '../components/memory/Material';
+import { useDayAspect } from '../lib/aspect';
 import { downloadBlob, exportFolderZip, folderName } from '../lib/folder';
-import { baseOf, rebuildDay, restyle, retuneDay, systemAxes, type Step } from '../lib/pipeline';
+import { rebuildDay, restyle, retuneDay, saveCover, systemAxes, type Step } from '../lib/pipeline';
 import { lookupSong } from '../lib/songMeta';
-import { store } from '../lib/storage';
+import { folders } from '../lib/shelf';
+import { onDayChange, store } from '../lib/storage';
 import { computeFeel, quickFeel } from '../lib/analysis/feel';
 import type { Axes, DayFeel, DayRecord, FeelAxes } from '../lib/types';
 
@@ -33,6 +37,14 @@ export function DayPage({ id }: { id: string }) {
       })
       .catch(() => {});
   }, [id]);
+  // обложка и формат фото дописываются в фоне — подхватываем, не перезагружая страницу
+  useEffect(
+    () =>
+      onDayChange(
+        (d) => d.id === id && setDay((cur) => (cur ? { ...cur, cover: d.cover, coverLayout: d.coverLayout, photoAspect: d.photoAspect, style: d.style, reasons: d.reasons, axes: d.axes } : cur)),
+      ),
+    [id],
+  );
 
   if (day === undefined) return <p className="label">Открываю папку дня…</p>;
   if (day === null)
@@ -63,7 +75,7 @@ function DayView({ day, onChange, number, prev, next }: ViewProps) {
   const [coverKey, setCoverKey] = useState(0);
   const report = (s: Step) => setSteps((p) => (p.some((x) => x.id === s.id) ? p.map((x) => (x.id === s.id ? s : x)) : [...p, s]));
 
-  // ── «не так ощущалось»: ручные оси с живым предпросмотром ────
+  // ── «не так ощущалось»: ручные оси — кадр, почерк и материал страницы перестраиваются сразу ────
   const [override, setOverride] = useState<Partial<Axes>>(day.axesOverride ?? {});
   const base = useMemo(() => systemAxes(day), [day]);
   const dirty = overrideKey(override) !== overrideKey(day.axesOverride ?? {});
@@ -76,20 +88,22 @@ function DayView({ day, onChange, number, prev, next }: ViewProps) {
     });
 
   // ── обложка ──────────────────────────────────────────────────
-  const coverSaved = useRef(Boolean(day.cover));
+  const hasCover = Boolean(freshCover(day));
+  const coverSaved = useRef(hasCover);
   useEffect(() => {
-    coverSaved.current = Boolean(day.cover);
-  }, [day.cover]);
+    coverSaved.current = hasCover;
+  }, [hasCover]);
   const onCover = useCallback(
     async (blob: Blob) => {
       if (coverSaved.current) return;
       coverSaved.current = true;
-      const ref = await store.putFile(`${baseOf(day)}/cover.jpg`, blob);
-      const latest = (await store.get(day.id)) ?? day;
-      await store.save({ ...latest, cover: ref });
+      await saveCover(day, blob);
     },
     [day],
   );
+  const aspect = useDayAspect(day);
+  const ratio = sheetRatio(view.style.layout.frame, aspect);
+  const emotion = useEmotion(view);
 
   // ── «Глубже в день»: второй слой ощущений, считается по кнопке, кадр не трогает ──
   const [feel, setFeel] = useState<DayFeel | undefined>(day.feel);
@@ -166,6 +180,7 @@ function DayView({ day, onChange, number, prev, next }: ViewProps) {
   const remove = async () => {
     if (!confirm(`Удалить папку «${day.folder}» без возможности восстановления?`)) return;
     await store.remove(day);
+    await folders.forgetDay(day.id);
     location.hash = '#/';
   };
   const saveTitle = async () => {
@@ -183,9 +198,9 @@ function DayView({ day, onChange, number, prev, next }: ViewProps) {
     try {
       const latest = (await store.get(day.id)) ?? day;
       const next = await retuneDay(latest, o, report);
-      coverSaved.current = false;
-      setCoverKey((k) => k + 1);
       setOverride(next.axesOverride ?? {});
+      coverSaved.current = false; // кадр в новом почерке — обложка для архива переснимается
+      setCoverKey((k) => k + 1);
       onChange(next);
     } catch (e) {
       alert(`Не удалось сохранить: ${(e as Error).message}`);
@@ -226,15 +241,16 @@ function DayView({ day, onChange, number, prev, next }: ViewProps) {
       <div className="min-w-0">
         <div className="pt-3 lg:sticky lg:top-6">
           {/* карточка дня — полароид на скотче */}
-          <div className="polaroid mx-auto max-w-[480px] -rotate-[1.2deg]">
-            <span className="tape -top-3 left-10 -rotate-6" />
-            <span className="tape tape-blue -top-2 right-8 rotate-[8deg]" />
+          {/* лист в формате фото: высокий снимок — уже, чтобы страница помещалась в экран */}
+          <div className="polaroid mx-auto -rotate-[1.2deg]" style={{ maxWidth: `min(${ratio > 1 ? 600 : 480}px, calc((100vh - 130px) * ${ratio.toFixed(3)}))` }}>
+            <Fastener e={emotion} accent={view.style.palette.accent} seed={view.style.shapes.seed} scale={1.35} />
             {photoUrls && photoUrls.length > 0 ? (
-              <MemoryCard day={view} number={number} photoUrls={photoUrls} live onCover={day.cover || dirty ? undefined : onCover} coverKey={coverKey} />
+              // пока кружки двигают, лист показывает черновик ощущения; обложку снимаем только с сохранённого
+              <MemoryCard day={view} number={number} photoUrls={photoUrls} live onCover={hasCover || dirty ? undefined : onCover} coverKey={coverKey} />
             ) : (
-              <div className="aspect-[4/5] w-full" style={{ background: day.style.palette.paper }} />
+              <div className="w-full" style={{ aspectRatio: ratio, background: view.style.palette.paper }} />
             )}
-            <div className="pointer-events-none absolute inset-x-3 bottom-2 truncate text-center font-hand text-[26px] leading-tight text-blue">
+            <div className="pointer-events-none absolute inset-x-3 bottom-2 truncate text-center leading-tight text-blue" style={{ ...handOf(emotion), fontSize: emotion.id === 'wonder' ? 30 : 24 }}>
               {day.signals.text.moodWords.join(' · ')}
             </div>
           </div>
@@ -255,7 +271,6 @@ function DayView({ day, onChange, number, prev, next }: ViewProps) {
             {date.weekday}
           </span>
         </a>
-        <span className="stain right-6 bottom-24 hidden sm:block" aria-hidden />
         <div className="pr-28 font-hand text-2xl text-ink-soft">
           страница № {number} · {agoText(day.date)}
         </div>

@@ -1,6 +1,23 @@
 import { useEffect, useState } from 'react';
 import { LIBRARY, LIBRARY_ARTIST } from './library';
-import type { DayRecord } from './types';
+import type { DayRecord, EmbedInfo, SongInfo } from './types';
+
+/** Мелодия из библиотеки дневника — исполнитель «Атмосфера» и название одной из мелодий. */
+export const isLibrarySong = (s: SongInfo) => s.artist === LIBRARY_ARTIST && LIBRARY.some((t) => t.name === s.title);
+/**
+ * Сначала выбрали мелодию дневника, потом вставили ссылку или вписали свою песню: имя «Атмосфера»
+ * и файл мелодии остались от неё. Такой файл — не эта песня, его нельзя играть вместо неё.
+ */
+export const strayLibraryAudio = (s: SongInfo) => s.artist === LIBRARY_ARTIST && !isLibrarySong(s);
+/**
+ * Файл песни дня нельзя играть, только если у дня есть ссылка на настоящую песню, а файл — хвост
+ * выбранной раньше мелодии. Без ссылки файл и есть песня: так бывает, когда сначала выбрали
+ * мелодию дневника, а потом загрузили свой файл без тега исполнителя — имя «Атмосфера» осталось,
+ * а музыка своя. Раньше такой день в показе и на странице молчал.
+ */
+export const strayAudio = (s: SongInfo) => strayLibraryAudio(s) && Boolean(s.link);
+/** Исполнитель для подписи: «Атмосфера», оставшаяся от мелодии, — не исполнитель чужой песни. */
+export const songArtist = (s: SongInfo) => (strayLibraryAudio(s) ? '' : s.artist);
 
 /**
  * Обложка песни дня для конверта пластинки.
@@ -104,48 +121,135 @@ function generated(day: DayRecord) {
 export const libraryCover = (id: string): string | undefined => ART[id];
 
 function libraryArt(day: DayRecord) {
-  if (day.song.artist !== LIBRARY_ARTIST) return undefined;
+  if (!isLibrarySong(day.song)) return undefined;
   const track = LIBRARY.find((t) => t.name === day.song.title);
   return track ? ART[track.id] : undefined;
 }
 
+/** YouTube: обложка ролика берётся прямо по его id, без запросов. */
+function youtubeThumb(link?: EmbedInfo) {
+  if (link?.provider !== 'youtube' || !link.embedUrl) return undefined;
+  const id = link.embedUrl.split('/embed/')[1]?.split(/[?&]/)[0];
+  return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : undefined;
+}
+
+/** Spotify и SoundCloud отдают обложку трека в открытом oEmbed — это и есть обложка с конверта. */
+async function oembedThumb(link: EmbedInfo): Promise<string> {
+  const api =
+    link.provider === 'spotify'
+      ? `https://open.spotify.com/oembed?url=${encodeURIComponent(link.url)}`
+      : `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(link.url)}`;
+  const r = await fetch(api);
+  if (!r.ok) throw new Error(String(r.status));
+  const d = (await r.json()) as { thumbnail_url?: string };
+  return d.thumbnail_url ?? '';
+}
+
 const MEMO = 'cover:';
-const read = (k: string) => {
+const read = (k: string, prefix = MEMO) => {
   try {
-    return localStorage.getItem(MEMO + k);
+    return localStorage.getItem(prefix + k);
   } catch {
     return null;
   }
 };
-const write = (k: string, v: string) => {
+const write = (k: string, v: string, prefix = MEMO) => {
   try {
-    localStorage.setItem(MEMO + k, v);
+    localStorage.setItem(prefix + k, v);
   } catch {
     /* приватный режим — просто не запоминаем */
   }
 };
 
-async function itunes(artist: string, title: string): Promise<string> {
-  const q = encodeURIComponent(`${artist} ${title}`.trim());
-  const r = await fetch(`https://itunes.apple.com/search?term=${q}&media=music&entity=song&limit=5`);
+interface Hit {
+  artistName: string;
+  trackName: string;
+  artworkUrl100?: string;
+  previewUrl?: string;
+}
+async function itunesSearch(term: string, limit = 5): Promise<Hit[]> {
+  const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term.trim())}&media=music&entity=song&limit=${limit}`);
   if (!r.ok) throw new Error(String(r.status));
-  const { results } = (await r.json()) as { results: { artistName: string; trackName: string; artworkUrl100?: string }[] };
-  const low = (s: string) => s.toLowerCase();
-  const best = results.find((x) => artist && low(x.artistName).includes(low(artist).split(/[,&]/)[0].trim())) ?? results[0];
+  return ((await r.json()) as { results: Hit[] }).results;
+}
+const low = (s: string) => s.toLowerCase();
+const artistMatch = (x: Hit, artist: string) => Boolean(artist) && low(x.artistName).includes(low(artist).split(/[,&]/)[0].trim());
+
+async function itunes(artist: string, title: string): Promise<string> {
+  const results = await itunesSearch(`${artist} ${title}`);
+  const best = results.find((x) => artistMatch(x, artist)) ?? results[0];
   return best?.artworkUrl100?.replace(/100x100bb/, '600x600bb') ?? '';
 }
 
-/** URL обложки; undefined — пока ищем (конверт остаётся бумажным, без мигания). */
-export function useSongCover(day: DayRecord): string | undefined {
-  const own = libraryArt(day);
-  const key = `${day.song.artist}|${day.song.title}`;
-  const [found, setFound] = useState<string | null>(() => (own ? null : read(key)));
+// ── фрагмент песни для показа ─────────────────────────────────────
+
+const norm = (s: string) => low(s).replace(/ё/g, 'е').replace(/\(.*?\)|\[.*?\]/g, '').replace(/[^\p{L}\p{N}]+/gu, '');
+const PLACEHOLDER = /^без (исполнителя|названия)$/i;
+const titleMatch = (x: Hit, title: string) => {
+  const a = norm(x.trackName);
+  const b = norm(title);
+  return Boolean(a && b) && (a === b || a.startsWith(b) || b.startsWith(a));
+};
+
+/**
+ * 30 секунд песни из открытого каталога iTunes — для дня, у которого песня записана ссылкой
+ * (Spotify, YouTube, Яндекс) или просто названием: официальный плеер сам не заиграет, а показу
+ * нужна музыка. Без исполнителя ищем только точное совпадение названия, чтобы не включить чужую
+ * песню. Нет сети или не нашлось — undefined, день идёт без звука.
+ */
+export function useSongPreview(day: DayRecord, enabled: boolean): string | undefined {
+  const artist = songArtist(day.song);
+  const a = PLACEHOLDER.test(artist.trim()) ? '' : artist.trim();
+  const t = PLACEHOLDER.test(day.song.title.trim()) ? '' : day.song.title.trim();
+  const key = enabled && t ? `${a}|${t}` : '';
+  const [found, setFound] = useState<{ key: string; url: string } | null>(null);
   useEffect(() => {
-    if (own || !day.song.title) return;
+    if (!key) return;
+    const memo = read(key, 'preview:');
+    if (memo) return setFound({ key, url: memo });
+    let alive = true;
+    itunesSearch(`${a} ${t}`, 10)
+      .then((hits) => {
+        // оригинал, а не ремикс или ускоренная версия: точное название выше, переделки ниже
+        const score = (x: Hit) =>
+          (artistMatch(x, a) ? 4 : 0) +
+          (titleMatch(x, t) ? 2 : 0) +
+          (low(x.trackName).trim() === low(t) ? 1 : 0) -
+          (/remix|sped|slowed|cover|karaoke|instrumental|nightcore|ремикс|кавер/i.test(`${x.trackName} ${x.artistName}`) ? 3 : 0);
+        const ok = hits.filter((x) => x.previewUrl && (a ? artistMatch(x, a) || titleMatch(x, t) : titleMatch(x, t)));
+        const best = ok.reduce<Hit | undefined>((b, x) => (!b || score(x) > score(b) ? x : b), undefined);
+        const url = best?.previewUrl ?? '';
+        if (url) write(key, url, 'preview:');
+        if (alive) setFound({ key, url });
+      })
+      .catch(() => alive && setFound({ key, url: '' }));
+    return () => {
+      alive = false;
+    };
+  }, [key, a, t]);
+  return found && found.key === key && found.url ? found.url : undefined;
+}
+
+/**
+ * URL обложки; undefined — пока ищем (конверт остаётся бумажным, без мигания).
+ * Порядок: мелодия дневника → обложка по ссылке на песню → iTunes по исполнителю и названию → рисунок в цветах дня.
+ */
+export function useSongCover(day: DayRecord): string | undefined {
+  const own = libraryArt(day) ?? youtubeThumb(day.song.link);
+  const link = day.song.link?.provider === 'spotify' || day.song.link?.provider === 'soundcloud' ? day.song.link : undefined;
+  const artist = songArtist(day.song);
+  const title = day.song.title;
+  // без исполнителя iTunes по одному названию найдёт чужую песню — тогда лучше нарисовать свою обложку
+  const key = link ? `link|${link.url}` : artist && title ? `${artist}|${title}` : '';
+  const [found, setFound] = useState<string | null>(() => (own || !key ? null : read(key)));
+  useEffect(() => {
+    if (own || !key) return;
     const memo = read(key);
     if (memo !== null) return setFound(memo);
     let alive = true;
-    itunes(day.song.artist, day.song.title)
+    const byLink = link ? oembedThumb(link).catch(() => '') : Promise.resolve('');
+    byLink
+      .then((url) => url || (artist && title ? itunes(artist, title) : ''))
       .then((url) => {
         write(key, url);
         if (alive) setFound(url);
@@ -154,9 +258,9 @@ export function useSongCover(day: DayRecord): string | undefined {
     return () => {
       alive = false;
     };
-  }, [own, key, day.song.artist, day.song.title]);
+  }, [own, key, link, artist, title]);
   if (own) return own;
-  if (!day.song.title) return generated(day);
+  if (!key) return generated(day);
   if (found === null) return undefined;
   return found || generated(day);
 }

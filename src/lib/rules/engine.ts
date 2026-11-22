@@ -38,20 +38,11 @@ export interface BuiltStyle {
  * Главная функция системы: сигналы текста, фото и музыки → оси настроения → визуальные параметры.
  * Каждое решение записывается в reasons, чтобы страницу дня можно было объяснить.
  */
-export function buildStyle(
-  t: TextSignals,
-  p: PhotoSignals,
-  m: MusicSignals,
-  seedKey: string,
-  w?: WeatherSignals,
-  override?: Partial<Axes>,
-): BuiltStyle {
-  const reasons: Reason[] = [];
+/** Оси настроения так, как их увидела система (без ручных поправок). */
+export function systemAxesOf(t: TextSignals, p: PhotoSignals, m: MusicSignals): Axes {
   const eraOld = m.era ? clamp((2008 - m.era) / 45) : 0;
   const gWarm = genreWarmth(m.genre);
-
-  // ── 1. Оси настроения ─────────────────────────────────────────────
-  const axes: Axes = {
+  return {
     tension: clamp(0.45 * t.tension + 0.15 * t.energy + 0.25 * m.energy + 0.15 * clamp(p.contrast * 3)),
     valence: clamp(
       0.6 * t.valence + 0.2 * (m.mode === 'major' ? 0.5 : -0.5) + 0.1 * (m.brightness * 2 - 1) + 0.1 * (p.luma * 2 - 1),
@@ -64,6 +55,20 @@ export function buildStyle(
     nature: SETTING_NATURE[t.setting],
     pace: clamp(0.6 * clamp((m.bpm - 60) / 110) + 0.4 * t.energy),
   };
+}
+
+export function buildStyle(
+  t: TextSignals,
+  p: PhotoSignals,
+  m: MusicSignals,
+  seedKey: string,
+  w?: WeatherSignals,
+  override?: Partial<Axes>,
+): BuiltStyle {
+  const reasons: Reason[] = [];
+
+  // ── 1. Оси настроения ─────────────────────────────────────────────
+  const sys: Axes = systemAxesOf(t, p, m);
 
   reasons.push({
     source: 'текст',
@@ -73,7 +78,7 @@ export function buildStyle(
   reasons.push({
     source: 'фото',
     cause: `${p.count} фото, тёплых оттенков ${pct(p.warmth)}, светлота ${pct(p.luma)}, контраст ${f2(p.contrast)}`,
-    effect: `основа палитры — цвета самих снимков; температура дня ${f2(axes.temperature)}`,
+    effect: `основа палитры — цвета самих снимков; температура дня ${f2(sys.temperature)}`,
   });
   reasons.push({
     source: 'музыка',
@@ -81,15 +86,17 @@ export function buildStyle(
     effect: `${m.mode === 'minor' ? 'минор приглушает цвет и сдвигает настроение вниз' : 'мажор поднимает насыщенность'}; энергия песни даёт ${pct(0.25)} веса оси напряжения`,
   });
 
-  // Человек главнее системы: поправленные вручную оси заменяют вычисленные, дальше всё считается от них.
+  // Поправленные вручную оси — это ощущение самого человека: оно сильнее того, что увидела система.
+  // От него строится всё дальше — почерк кадра, обработка фото, палитра (и материал страницы в emotion.ts).
+  const axes: Axes = { ...sys };
   const changed = (Object.keys(override ?? {}) as (keyof Axes)[]).filter(
-    (k) => typeof override?.[k] === 'number' && Math.abs((override[k] as number) - axes[k]) > 0.005,
+    (k) => typeof override?.[k] === 'number' && Math.abs((override[k] as number) - sys[k]) > 0.005,
   );
   if (changed.length) {
     reasons.push({
       source: 'вы',
-      cause: `поправили ощущение: ${changed.map((k) => `${AXIS_RU[k]} ${f2(axes[k])} → ${f2(override![k] as number)}`).join(', ')}`,
-      effect: 'система пересобрала страницу от ваших осей',
+      cause: `поправили ощущение: ${changed.map((k) => `${AXIS_RU[k]} ${f2(sys[k])} → ${f2(override![k] as number)}`).join(', ')}`,
+      effect: 'почерк кадра, обработка фото и материал страницы перестроены под ваше ощущение',
     });
     for (const k of changed) axes[k] = clamp(override![k] as number, k === 'valence' ? -1 : 0, 1);
   }
@@ -101,7 +108,8 @@ export function buildStyle(
       const scale = k === 'valence' ? 0.5 : 1;
       d += AXIS_WEIGHTS[k] * ((axes[k] - mode.prototype[k]) * scale) ** 2;
     }
-    return { id: mode.id, score: Math.exp(-d / 0.35) };
+    // ночь тянет к ноктюрну, зима и море — к цианотипии, семейный альбом — к сепии
+    return { id: mode.id, score: Math.exp(-d / 0.35 + (mode.affinity?.({ t, m, w, axes }) ?? 0)) };
   }).sort((a, b) => b.score - a.score);
 
   const primary = MODES[scores[0].id];
@@ -115,9 +123,9 @@ export function buildStyle(
   });
 
   // ── 3. Шейдер: смешиваем два режима и модулируем осями ───────────
-  const sh = {} as ShaderParams;
+  const sh = {} as Required<ShaderParams>;
   for (const k of Object.keys(primary.shader) as (keyof ShaderParams)[]) {
-    sh[k] = lerp(primary.shader[k], secondary.shader[k], blend);
+    sh[k] = lerp(primary.shader[k], secondary.shader[k] ?? 0, blend);
   }
   sh.painterly *= 1 - 0.5 * axes.tension;
   sh.grain = clamp(sh.grain + 0.25 * axes.nostalgia);
@@ -232,7 +240,15 @@ export const AXIS_RU: Record<keyof Axes, string> = {
   pace: 'темп',
 };
 
+/** Режимы-отпечатки печатаются своими красками, а не цветами фото: синька и сепия. */
+const PRINT_PALETTES: Partial<Record<ModeId, StyleParams['palette']>> = {
+  cyanotype: { paper: '#eef1ef', ink: '#10295a', accent: '#2f5f9e', shades: ['#1b4280', '#5c8bc0', '#a7c2dd', '#dbe6ef'], dark: false },
+  sepia: { paper: '#efe3c8', ink: '#3a2414', accent: '#8c5a31', shades: ['#5c3a20', '#a6764a', '#cdac82', '#e5d1af'], dark: false },
+};
+
 function buildPalette(p: PhotoSignals, axes: Axes, t: TextSignals, mode: ModeId): StyleParams['palette'] {
+  const print = PRINT_PALETTES[mode];
+  if (print) return { ...print, shades: [...print.shades] };
   const cols = p.palette.length ? p.palette : ['#c9b9a6', '#6b5b4b', '#2b2622'];
   const withHsl = cols.map((c, i) => ({ c, w: p.weights[i] ?? 0.1, hsl: hsl(c) }));
   const lightest = [...withHsl].sort((a, b) => b.hsl[2] - a.hsl[2])[0];
@@ -240,7 +256,8 @@ function buildPalette(p: PhotoSignals, axes: Axes, t: TextSignals, mode: ModeId)
   const vivid = [...withHsl].sort((a, b) => b.hsl[1] * Math.pow(b.w, 0.3) - a.hsl[1] * Math.pow(a.w, 0.3))[0];
   const temp = (axes.temperature - 0.5) * 1.6;
   const satMul = 0.7 + 0.6 * ((axes.valence + 1) / 2);
-  const dark = (t.timeOfDay === 'night' && axes.tension > 0.5) || (p.luma < 0.22 && axes.valence < 0);
+  // ноктюрн всегда печатается «в негативе»: тёмная бумага, светлые чернила
+  const dark = mode === 'nocturne' || (t.timeOfDay === 'night' && axes.tension > 0.5) || (p.luma < 0.22 && axes.valence < 0);
 
   const paper = dark
     ? adjust(darkest.c, { temp: temp * 0.6, s: clamp(darkest.hsl[1] * 0.6, 0.12, 0.32), l: 0.11 })

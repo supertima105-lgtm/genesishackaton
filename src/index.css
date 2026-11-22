@@ -31,6 +31,97 @@ body {
   background-size: 7px 7px, 11px 11px;
 }
 
+/* Тёмная тема — «ночной стол»: тёмное дерево и сукно, а сами карточки-воспоминания остаются бумажными. */
+:root[data-theme='dark'] {
+  --color-desk: #1d1a17;
+  --color-paper: #2a2622;
+  --color-paper-2: #332e28;
+  --color-ink: #ece3d2;
+  --color-ink-soft: #a99d8a;
+  --color-line: #4b4339;
+  --color-rule: #36414f;
+  --color-blue: #9fb9ec;
+  --color-note: #4d4325;
+  --color-rust: #e48a6c;
+}
+/* свет лампы над столом показа: днём тёплое пятно и мягкая виньетка, ночью — приглушённый круг света в темноте */
+:root {
+  --desk-dots: radial-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px), radial-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+  --show-lamp: radial-gradient(ellipse 65% 60% at 40% 42%, rgba(255, 226, 170, 0.32), transparent 70%),
+    radial-gradient(ellipse 120% 105% at 50% 45%, transparent 52%, rgba(45, 26, 10, 0.58) 100%);
+}
+:root[data-theme='dark'] {
+  --desk-dots: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px), radial-gradient(rgba(0, 0, 0, 0.3) 1px, transparent 1px);
+  --show-lamp: radial-gradient(ellipse 60% 55% at 40% 45%, rgba(255, 214, 150, 0.09), transparent 72%),
+    radial-gradient(ellipse 120% 105% at 50% 45%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+}
+/* Вещи из бумаги и картона — страницы книги, полароиды, конверт пластинки, ярлыки и марки — и ночью
+   остаются светлыми, поэтому на них пишут прежними тёмными чернилами: светлые «ночные» чернила на
+   светлой бумаге почти не видно (бледное название месяца, дни недели, подписи). */
+:root[data-theme='dark']
+  :is(.sleeve, .page, .polaroid, .chip, .bk-polaroid, .peek, .pick-card, .folder-menu, .take-out, .dfolder-print, .dfolder-label, .chooser-item) {
+  --color-paper: #fbf6ea;
+  --color-paper-2: #f1e8d6;
+  --color-ink: #2b2620;
+  --color-ink-soft: #776b5c;
+  --color-line: #ddd1bc;
+  --color-rule: #d3dfec;
+  --color-blue: #2f4f8f;
+  --color-note: #fff3a8;
+  --color-rust: #b5452c;
+  color: var(--color-ink);
+}
+:root[data-theme='dark'] body {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px), radial-gradient(rgba(0, 0, 0, 0.3) 1px, transparent 1px);
+}
+/* ночные кнопки — на столе; кнопка на светлой странице («записать день») остаётся бумажной */
+:root[data-theme='dark'] .btn:where(:not(.page *, .sleeve *)) {
+  background: #2f2a25;
+}
+:root[data-theme='dark'] .btn:hover:not(:disabled):where(:not(.page *, .sleeve *)) {
+  background: #4d4325;
+}
+:root[data-theme='dark'] .btn-solid,
+:root[data-theme='dark'] .bg-blue {
+  background: #36558f;
+  border-color: #36558f;
+  color: #fff;
+}
+:root[data-theme='dark'] .sheet {
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* карточка настроек — лист плотной бумаги на листе дневника, без кричащего жёлтого */
+.card-paper {
+  position: relative;
+  background: #fffdf7;
+  border: 1px solid var(--color-line);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 10px 24px -14px rgba(80, 60, 30, 0.35);
+}
+.card-paper::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  width: 84px;
+  height: 20px;
+  transform: translateX(-50%) rotate(-2deg);
+  background: rgba(214, 200, 170, 0.55);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+}
+:root[data-theme='dark'] .card-paper {
+  background: #2f2a25;
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.6);
+}
+:root[data-theme='dark'] .card-paper::before {
+  background: rgba(120, 108, 88, 0.45);
+}
+
+/* крупный текст из настроек */
+:root[data-text='big'] {
+  font-size: 112.5%;
+}
+
 /* базовые компоненты — в слое components, чтобы утилиты Tailwind могли их переопределять */
 @layer components {
 .label {
@@ -99,17 +190,6 @@ body {
   border-radius: 4px;
   box-shadow: 0 30px 60px -20px rgba(60, 40, 10, 0.35), 0 2px 0 rgba(0, 0, 0, 0.04);
 }
-/* след от кружки чая на странице */
-.stain {
-  position: absolute;
-  width: 150px;
-  height: 150px;
-  border-radius: 50%;
-  background: radial-gradient(circle, transparent 0 58%, rgba(150, 100, 40, 0.13) 61%, rgba(150, 100, 40, 0.05) 66%, transparent 69%),
-    radial-gradient(circle at 40% 45%, rgba(150, 100, 40, 0.05), transparent 60%);
-  pointer-events: none;
-}
-
 /* пластинка в бумажном конверте */
 .sleeve {
   background-color: #e6d3ad;
@@ -220,6 +300,83 @@ body {
   transform: translateX(-50%);
   box-shadow: 0 2px 3px rgba(0, 0, 0, 0.3);
   z-index: 3;
+}
+
+/* чем день приколот — зависит от его настроения (src/components/memory/Material.tsx) */
+.fx {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+}
+.fx-pin {
+  top: -8px;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  translate: -50% 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ff8a80, #c62828);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.3);
+}
+/* старая латунная кнопка — плоская шляпка */
+.fx-tack {
+  top: -9px;
+  left: 50%;
+  width: 21px;
+  height: 21px;
+  translate: -50% 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 32%, #fff4c4 0 7%, #e2bf62 20%, #b98a2c 58%, #7c5817 90%);
+  box-shadow: 0 3px 4px rgba(0, 0, 0, 0.35), inset 0 0 0 1px rgba(90, 60, 10, 0.45), inset 0 -2px 3px rgba(80, 50, 0, 0.35);
+}
+/* бумажный скотч с рваными концами */
+.fx-washi {
+  width: 92px;
+  height: 24px;
+  background-color: var(--tc, #f0d78c);
+  opacity: 0.88;
+  mix-blend-mode: multiply;
+  clip-path: polygon(0 6%, 3% 24%, 0.8% 42%, 3.4% 60%, 0.6% 80%, 2.6% 100%, 97% 100%, 99.6% 82%, 97.4% 63%, 100% 44%, 97.2% 24%, 99.4% 3%, 3% 0);
+}
+.fx-dots {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.7) 0 2px, transparent 2.6px);
+  background-size: 9px 9px;
+}
+.fx-stripes {
+  background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.38) 0 5px, transparent 5px 11px);
+}
+/* прозрачный матовый скотч — почти не видно */
+.fx-clear {
+  width: 84px;
+  height: 26px;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0.6), rgba(236, 241, 246, 0.42) 40%, rgba(255, 255, 255, 0.55) 70%, rgba(228, 234, 240, 0.45));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  backdrop-filter: brightness(1.04) saturate(0.9);
+  clip-path: polygon(0 4%, 2.5% 30%, 0.5% 55%, 2.8% 78%, 0.4% 100%, 99% 100%, 97.5% 72%, 100% 48%, 97.6% 22%, 99.4% 0);
+}
+/* скоба степлера */
+.fx-staple {
+  width: 24px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(#f6f8fa, #aab1b8 55%, #6c737a);
+  box-shadow: 0 1.5px 1.5px rgba(0, 0, 0, 0.42);
+}
+/* крафтовый скотч путешественника */
+.fx-kraft {
+  width: 100px;
+  height: 28px;
+  background-color: #c49a64;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='k'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .22 0 0 0 0 .08 0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23k)'/%3E%3C/svg%3E");
+  opacity: 0.94;
+  box-shadow: 0 1px 2px rgba(40, 25, 5, 0.25);
+  clip-path: polygon(0 5%, 2.6% 27%, 0.6% 50%, 3% 74%, 0.8% 100%, 98.6% 100%, 100% 76%, 97.6% 52%, 99.6% 26%, 97.8% 0);
+}
+.fx-clip {
+  width: 22px;
+  height: 58px;
+  overflow: visible;
+  filter: drop-shadow(0 2px 1.5px rgba(0, 0, 0, 0.35));
 }
 
 /* почтовый штемпель с датой */
@@ -618,23 +775,32 @@ select,
   animation: none;
   stroke-dashoffset: 0;
 }
-/* тень, которую лист отбрасывает на страницы под собой; ширину и силу задаёт JS */
+/* тень, которую лист отбрасывает на страницы под собой: ровная под листом, плотнее всего у его
+   свободного края (--edge), дальше мягко тает. Лежит во всех полосах половины — копией во всю
+   страницу, как и сама бумага, — поэтому доходит до корешка без шва. Край и силу задаёт JS */
 .cast {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 0;
+  z-index: 30;
+  width: var(--pw);
   opacity: 0;
-  transform: translateZ(0.5px);
   pointer-events: none;
+  --shade: 48, 27, 6;
+  background: linear-gradient(
+    var(--cast-dir),
+    rgba(var(--shade), 0.46) 0,
+    rgba(var(--shade), 0.56) var(--edge, 40%),
+    rgba(var(--shade), 0.26) var(--mid, 60%),
+    rgba(var(--shade), 0.08) var(--far, 80%),
+    transparent var(--end, 100%)
+  );
 }
 .chain-l .cast {
-  right: 0;
-  background: linear-gradient(270deg, rgba(30, 16, 3, 0.6), rgba(30, 16, 3, 0.22) 45%, transparent);
+  --cast-dir: 270deg;
 }
 .chain-r .cast {
-  left: 0;
-  background: linear-gradient(90deg, rgba(30, 16, 3, 0.6), rgba(30, 16, 3, 0.22) 45%, transparent);
+  --cast-dir: 90deg;
 }
 
 /* загнутый уголок — часть самой страницы, переворачивается вместе с ней; за него можно тянуть */
@@ -800,68 +966,6 @@ select,
 .cell-day:focus-visible .stamp-wrap {
   transform: rotate(0deg) scale(1.08);
 }
-/* лоскутное одеяло года: льняная основа, лоскуты со стежком по краю */
-.quilt {
-  padding: 12px 12px 12px 8px;
-  border-radius: 3px;
-  background-color: #efe3cb;
-  background-image: repeating-linear-gradient(0deg, rgba(120, 90, 50, 0.05) 0 1px, transparent 1px 3px),
-    repeating-linear-gradient(90deg, rgba(120, 90, 50, 0.05) 0 1px, transparent 1px 3px);
-  box-shadow: inset 0 0 0 1px rgba(110, 80, 40, 0.14), 0 10px 22px -16px rgba(60, 40, 10, 0.55);
-  outline: 1.5px dashed rgba(140, 100, 55, 0.4);
-  outline-offset: -5px;
-}
-.patch {
-  position: relative;
-  display: block;
-  aspect-ratio: 1.45;
-  border-radius: 2px;
-  transform: rotate(var(--r, 0deg));
-  box-shadow: 0 1px 1.5px rgba(60, 40, 10, 0.35);
-  transition: transform 0.25s cubic-bezier(0.3, 1.4, 0.5, 1);
-}
-/* стежок по краю лоскута */
-.patch::before {
-  content: '';
-  position: absolute;
-  inset: max(1.5px, 12%);
-  border: 1px dashed var(--st, rgba(255, 255, 255, 0.7));
-  border-radius: 1px;
-  pointer-events: none;
-}
-a.patch:hover,
-a.patch:focus-visible {
-  z-index: 2;
-  transform: rotate(0deg) scale(1.45);
-  box-shadow: 0 4px 8px -2px rgba(60, 40, 10, 0.45);
-}
-.patch-empty {
-  background: #f8f1e3;
-  box-shadow: none;
-  --st: rgba(120, 95, 60, 0.28);
-}
-.patch-empty:hover {
-  background: #fffaf0;
-}
-.patch-future {
-  box-shadow: none;
-  --st: rgba(120, 95, 60, 0.13);
-}
-/* сегодня — красная булавка в углу лоскута */
-.patch-today::after {
-  content: '';
-  position: absolute;
-  top: -3px;
-  right: -3px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #e9806a, #b5452c 60%);
-  box-shadow: 0 0 0 1.5px #fff8ec, 0 1px 2px rgba(60, 20, 10, 0.5);
-}
-.patch-legend {
-  width: 18px;
-}
 
 /* акварельное пятно в цвет дня — по сетке сразу видно, каким был месяц */
 .wash {
@@ -949,6 +1053,474 @@ a.patch:focus-visible {
 .page-swap-prev {
   animation: swap-prev 0.5s cubic-bezier(0.3, 0.7, 0.3, 1) both;
 }
+
+/* несколько воспоминаний в одну дату: пометка «×3» карандашом и веер снимков на выбор */
+.stamp-count {
+  position: absolute;
+  right: 7%;
+  bottom: 3%;
+  z-index: 3;
+  font-family: var(--font-hand);
+  font-size: 3.2cqw;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-rust);
+  rotate: -8deg;
+  pointer-events: none;
+}
+.pick {
+  position: absolute;
+  bottom: calc(100% + 0.6cqw);
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.2cqw;
+  padding: 1.2cqw;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(1.4cqw) scale(0.94);
+  transition: opacity 0.2s, transform 0.3s cubic-bezier(0.3, 1.35, 0.5, 1), visibility 0s 0.3s;
+  pointer-events: none;
+}
+/* мостик над щелью между клеткой и веером — курсор не теряет наведение по дороге */
+.pick::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  height: 2.2cqw;
+}
+.pick.pick-down {
+  top: calc(100% + 0.6cqw);
+  bottom: auto;
+  transform: translateY(-1.4cqw) scale(0.94);
+}
+.pick.pick-down::before {
+  top: auto;
+  bottom: 100%;
+}
+.cell-multi:hover .pick,
+.cell-multi:focus-within .pick {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  pointer-events: auto;
+  transition: opacity 0.2s, transform 0.3s cubic-bezier(0.3, 1.35, 0.5, 1), visibility 0s;
+}
+.pick-card {
+  position: relative;
+  display: block;
+  flex: none;
+  padding: 0.7cqw 0.7cqw 0;
+  background: #fffdf7;
+  box-shadow: 0 1.6cqw 2.6cqw -1.2cqw rgba(30, 20, 5, 0.55), 0 0.15cqw 0.4cqw rgba(30, 20, 5, 0.14);
+  transform: rotate(var(--r));
+  transition: transform 0.3s cubic-bezier(0.3, 1.35, 0.5, 1);
+}
+.pick-card:hover,
+.pick-card:focus-visible {
+  z-index: 1;
+  transform: rotate(0deg) translateY(-0.7cqw) scale(1.07);
+}
+.pick-cap {
+  display: block;
+  overflow: hidden;
+  padding: 0.5cqw 0.2cqw 0.8cqw;
+  font-family: var(--font-hand);
+  font-size: max(10px, 2.2cqw);
+  font-weight: 600;
+  line-height: 1.05;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-ink);
+}
+
+/* стена архива: листы разного формата приколоты по верхнему краю, ширина — по формату листа */
+/* база с запасом: в ряд входят 2 / 3 / 4 листа даже с широким кадром, остаток ряда добирает рост */
+.pinboard {
+  --col: calc(41% - 8px);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 36px 20px;
+}
+@media (min-width: 640px) {
+  .pinboard {
+    --col: calc(42% - 12px);
+    column-gap: 32px;
+  }
+}
+@media (min-width: 768px) {
+  .pinboard {
+    --col: calc(30% - 16px);
+  }
+}
+@media (min-width: 1280px) {
+  .pinboard {
+    --col: calc(23% - 18px);
+  }
+}
+/* ряд дотягивается до края: листы чуть подрастают пропорционально своей ширине — не больше чем на пятую часть,
+   чтобы неполный последний ряд не выглядел крупнее остальных */
+.pin-slot {
+  flex: var(--k, 1) 1 calc(var(--col) * var(--k, 1));
+  min-width: 0; /* длинная подпись обрезается многоточием, а не выталкивает лист в отдельный ряд */
+  max-width: min(100%, calc(var(--col) * var(--k, 1) * 1.2));
+}
+
+/* ярлык «в папку» — крафтовая бирка на уголке карточки */
+.folder-tag-wrap {
+  position: absolute;
+  top: 16px;
+  right: 0;
+  z-index: 6;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.pin-slot:hover .folder-tag-wrap,
+.folder-tag-wrap:focus-within,
+.folder-tag-wrap.is-open {
+  opacity: 1;
+}
+@media (hover: none) {
+  .folder-tag-wrap {
+    opacity: 1;
+  }
+}
+.folder-tag {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 26px;
+  padding-left: 9px;
+  color: #3a2817;
+  background-color: #cfac80;
+  background-image: radial-gradient(circle at 9px 50%, rgba(60, 40, 15, 0.55) 0 2.6px, transparent 3.2px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='k'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .22 0 0 0 0 .08 0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23k)'/%3E%3C/svg%3E");
+  clip-path: polygon(24% 0, 100% 0, 100% 100%, 24% 100%, 0 50%);
+  filter: drop-shadow(0 2px 2px rgba(40, 25, 5, 0.3));
+  rotate: 7deg;
+  transition: rotate 0.25s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.folder-tag:hover,
+.is-open .folder-tag {
+  rotate: -2deg;
+}
+.is-filed .folder-tag {
+  color: var(--color-blue);
+}
+.folder-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 228px;
+  max-height: 290px;
+  overflow-y: auto;
+  padding: 8px 6px 10px;
+  background: #fffdf6;
+  box-shadow: 0 14px 26px -10px rgba(40, 25, 5, 0.45), 0 1px 2px rgba(40, 25, 5, 0.15);
+  rotate: -1deg;
+}
+.folder-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 4px 8px 5px;
+  font-family: var(--font-hand);
+  font-size: 21px;
+  line-height: 1.1;
+  text-align: left;
+}
+.folder-menu-row:hover {
+  background: rgba(255, 243, 168, 0.85);
+}
+.folder-menu-dot {
+  flex: none;
+  width: 15px;
+  height: 12px;
+  clip-path: polygon(0 18%, 38% 18%, 46% 0, 100% 0, 100% 100%, 0 100%);
+}
+/* убрать из папки — бумажный кружок на уголке */
+.take-out {
+  position: absolute;
+  top: 12px;
+  right: 2px;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(43, 38, 32, 0.18);
+  border-radius: 50%;
+  background: #fffdf6;
+  color: var(--color-rust);
+  box-shadow: 0 2px 5px rgba(40, 25, 5, 0.22);
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.pin-slot:hover .take-out,
+.take-out:focus-visible {
+  opacity: 1;
+}
+.take-out:hover {
+  transform: scale(1.12) rotate(-6deg);
+}
+@media (hover: none) {
+  .take-out {
+    opacity: 1;
+  }
+}
+
+/* папки архива: картон с язычком, из-за переднего клапана выглядывают снимки */
+.folder-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  align-items: end;
+  gap: 30px 26px;
+}
+@media (min-width: 640px) {
+  .folder-shelf {
+    grid-template-columns: repeat(auto-fill, minmax(185px, 220px));
+  }
+}
+.dfolder {
+  position: relative;
+  display: block;
+}
+.dfolder-body {
+  --fc: #d2ad74;
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.18;
+  perspective: 620px;
+  filter: drop-shadow(0 10px 12px rgba(60, 40, 10, 0.26)) drop-shadow(0 1px 1px rgba(60, 40, 10, 0.22));
+}
+.dfolder-back {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--fc) 84%, #2a1a06), color-mix(in srgb, var(--fc) 74%, #2a1a06));
+  clip-path: polygon(0 4%, 1.6% 0.4%, 35% 0, 40.5% 9.5%, 98.4% 9.5%, 100% 12.5%, 100% 100%, 0 100%);
+}
+.dfolder-print {
+  position: absolute;
+  bottom: 30%;
+  width: 42%;
+  aspect-ratio: 0.84;
+  padding: 3.6% 3.6% 9%;
+  background: #fffdf7;
+  box-shadow: 0 1px 3px rgba(40, 25, 5, 0.32);
+  transform: translateY(var(--lift, 0%)) rotate(var(--r));
+  transition: transform 0.42s cubic-bezier(0.3, 1.4, 0.5, 1);
+  transition-delay: calc(var(--i, 0) * 45ms);
+}
+.dfolder-print img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: sepia(0.18) saturate(0.88) contrast(1.03);
+}
+.dfolder:hover .dfolder-print,
+.dfolder:focus-visible .dfolder-print,
+.dfolder.is-over .dfolder-print {
+  transform: translateY(calc(var(--lift, 0%) - 16%)) rotate(calc(var(--r) * 1.35));
+}
+.dfolder-front {
+  position: absolute;
+  inset: 34% 0 0;
+  border-radius: 3px 3px 4px 4px;
+  background-color: var(--fc);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='k'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .22 0 0 0 0 .08 0 0 0 .2 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23k)'/%3E%3C/svg%3E"),
+    linear-gradient(172deg, rgba(255, 255, 255, 0.3), transparent 38%, rgba(70, 40, 10, 0.16));
+  box-shadow: 0 -5px 10px -6px rgba(40, 25, 5, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  transform-origin: 50% 100%;
+  transition: transform 0.42s cubic-bezier(0.3, 1.3, 0.5, 1);
+}
+.dfolder:hover .dfolder-front,
+.dfolder:focus-visible .dfolder-front {
+  transform: rotateX(-13deg);
+}
+.dfolder.is-over .dfolder-front {
+  transform: rotateX(-26deg);
+}
+.dfolder-took .dfolder-front {
+  animation: folder-gulp 0.55s ease;
+}
+.dfolder-label {
+  position: absolute;
+  top: 17%;
+  left: 8%;
+  max-width: 82%;
+  overflow: hidden;
+  padding: 0.08em 0.45em 0.18em;
+  background: #fffaf0;
+  box-shadow: 0 1px 2px rgba(40, 25, 5, 0.28);
+  font-family: var(--font-hand);
+  font-size: clamp(19px, 1.65vw, 25px);
+  font-weight: 700;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-ink);
+  rotate: -1.6deg;
+}
+.dfolder-count {
+  position: absolute;
+  bottom: 11%;
+  left: 9%;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(40, 25, 8, 0.66);
+}
+.dfolder-big .dfolder-label {
+  font-size: 27px;
+}
+.dfolder-new {
+  aspect-ratio: 1.18;
+}
+.dfolder-sketch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  padding-top: 10%;
+  color: var(--color-ink-soft);
+  transition: color 0.2s, transform 0.25s;
+}
+.dfolder-sketch:hover,
+.dfolder-new.is-over .dfolder-sketch {
+  color: var(--color-ink);
+  transform: rotate(-1.2deg);
+}
+.dfolder-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+.dfolder-input {
+  position: relative;
+  width: 82%;
+  border-bottom: 1.5px dashed var(--color-blue);
+  background: transparent;
+  font-family: var(--font-hand);
+  font-size: 24px;
+  text-align: center;
+  outline: none;
+}
+.folder-swatch {
+  width: 30px;
+  height: 24px;
+  clip-path: polygon(0 16%, 34% 16%, 42% 0, 100% 0, 100% 100%, 0 100%);
+  opacity: 0.8;
+  transition: transform 0.2s, opacity 0.2s;
+}
+.folder-swatch:hover {
+  opacity: 1;
+  transform: translateY(-2px);
+}
+.folder-swatch.is-on {
+  opacity: 1;
+  transform: translateY(-4px) scale(1.18);
+}
+/* пока день тащат — снизу выезжает крафтовая полоска с папками */
+.drop-dock {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  max-width: calc(100vw - 24px);
+  overflow-x: auto;
+  padding: 26px 22px 16px;
+  background-color: #cfac80;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='k'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .22 0 0 0 0 .08 0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23k)'/%3E%3C/svg%3E");
+  box-shadow: 0 -12px 30px -14px rgba(60, 40, 10, 0.55);
+  transform: translate(-50%, 115%);
+  transition: transform 0.35s cubic-bezier(0.3, 1.2, 0.5, 1);
+  pointer-events: none;
+}
+.drop-dock.is-on {
+  transform: translate(-50%, 0);
+  pointer-events: auto;
+}
+.drop-dock .dfolder,
+.drop-dock .dfolder-compact {
+  flex: none;
+  width: 128px;
+}
+.drop-dock .dfolder-label {
+  font-size: 17px;
+}
+.drop-dock .dfolder-count {
+  font-size: 8px;
+}
+/* выбор воспоминаний для папки */
+.chooser-item {
+  position: relative;
+  display: block;
+  padding: 6px 6px 8px;
+  background: #fffdf7;
+  box-shadow: 0 6px 12px -8px rgba(40, 25, 5, 0.5);
+  opacity: 0.72;
+  transition: transform 0.2s, opacity 0.2s;
+}
+.chooser-item:hover {
+  opacity: 1;
+  transform: translateY(-2px) rotate(-0.6deg);
+}
+.chooser-item.is-on {
+  opacity: 1;
+}
+.chooser-item.is-on::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: 28%;
+  z-index: 1;
+  width: 44%;
+  height: 14px;
+  background: rgba(240, 215, 140, 0.85);
+  rotate: -3deg;
+}
+.chooser-check {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--color-blue);
+  color: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  rotate: -8deg;
+}
+}
+
+@keyframes folder-gulp {
+  30% {
+    transform: rotateX(-30deg);
+  }
+  65% {
+    transform: rotateX(5deg);
+  }
 }
 
 @keyframes draw-in {

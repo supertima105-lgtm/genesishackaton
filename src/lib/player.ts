@@ -12,6 +12,8 @@ export interface Player {
 export function usePlayer(url?: string): Player {
   const media = useRef<HTMLMediaElement | null>(null);
   const [playing, setPlaying] = useState(false);
+  // песню уже просили играть, а файла ещё не было (фрагмент ищется в сети) — заиграет, когда придёт
+  const want = useRef(false);
 
   useEffect(() => {
     if (!url) return;
@@ -22,6 +24,7 @@ export function usePlayer(url?: string): Player {
     a.onplay = () => setPlaying(true);
     a.onpause = () => setPlaying(false);
     media.current = a;
+    if (want.current) void a.play().catch(() => {});
     return () => {
       a.pause();
       a.removeAttribute('src');
@@ -31,11 +34,13 @@ export function usePlayer(url?: string): Player {
   }, [url]);
 
   const start = useCallback(() => {
+    want.current = true;
     const m = media.current;
     if (m) void m.play().catch(() => {});
     else setPlaying(true);
   }, []);
   const pause = useCallback(() => {
+    want.current = false;
     const m = media.current;
     if (m) m.pause();
     else setPlaying(false);

@@ -1,5 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from 'react';
 import { MODES } from '../lib/rules/modes';
+import { playFlip } from '../lib/sfx';
+import { songArtist } from '../lib/songCover';
 import { thumbCached, thumbUrl, warmThumbs } from '../lib/thumb';
 import type { Axes, DayRecord, FileRef, ModeId } from '../lib/types';
 import { localToday, plural, useDays } from '../lib/useDays';
@@ -107,6 +109,8 @@ interface Anim {
 }
 type Render = (p: number) => void;
 type Side = 'left' | 'right';
+/** Тень листа на половине разворота — по куску в каждой полосе, от корешка до края. */
+type Casts = (HTMLDivElement | null)[];
 
 const vars = (v: Record<string, string | number>) => v as CSSProperties;
 
@@ -117,7 +121,8 @@ const vars = (v: Record<string, string | number>) => v as CSSProperties;
 const GUTTER_W = [0.02, 0.025, 0.03, 0.035];
 const GUTTER_A = [40, 24, 12, 5];
 const PAGE_A = 2.5;
-const MAIN_W = 1 - GUTTER_W.reduce((a, b) => a + b, 0);
+const GUTTER_SUM = GUTTER_W.reduce((a, b) => a + b, 0);
+const MAIN_W = 1 - GUTTER_SUM;
 const STATIC_W = [...GUTTER_W, MAIN_W];
 const STATIC_A = [...GUTTER_A, PAGE_A];
 const LEAF_W = [...GUTTER_W, ...Array<number>(8).fill(MAIN_W / 8)];
@@ -142,12 +147,22 @@ const easeOut = (t: number) => 1 - (1 - t) ** 3;
  */
 const pageLeft = (side: Side, s: number, w: number, nudge: boolean) =>
   `calc(var(--pw) * ${side === 'right' ? -s : -(1 - s - w)}${nudge ? ' + 1px' : ''})`;
-/** Свет: чем круче наклон бумаги, тем она темнее. Градиент по полосе — между углами соседей. */
-const shadeOf = (a: number) => (1 - Math.abs(Math.cos(a * RAD))) ** 1.3 * 0.42;
+/**
+ * Свет падает сверху: чем круче наклон бумаги, тем меньше света на неё попадает. Градиент по
+ * полосе — между углами соседей, поэтому изгиб листа читается как переход света в тень.
+ * Тень тёплая, коричневая: серая (rgba почти чёрного) превращала вставший лист в грязную
+ * плоскость, а потолок 0.064 делал его плоской светлой картонкой. Одна формула и для лежащих
+ * страниц, и для листа — в начале и в конце листания они совпадают без шва.
+ */
+const shadeOf = (a: number) => 0.26 * (1 - Math.abs(Math.cos(a * RAD))) ** 0.95;
 const shadeGrad = (A: number[], i: number, deg: number) => {
   const dIn = shadeOf(i === 0 ? A[0] : (A[i] + A[i - 1]) / 2).toFixed(3);
   const dOut = shadeOf(i === A.length - 1 ? A[i] : (A[i] + A[i + 1]) / 2).toFixed(3);
-  return `linear-gradient(${deg}deg, rgba(28,16,3,${dIn}), rgba(28,16,3,${dOut}))`;
+  return `linear-gradient(${deg}deg, rgba(74,44,12,${dIn}), rgba(74,44,12,${dOut}))`;
+};
+const smooth = (a: number, b: number, x: number) => {
+  const t = clamp01((x - a) / (b - a));
+  return t * t * (3 - 2 * t);
 };
 /** Профиль нижнего края страницы от корешка: точки [x, z] в px. */
 const profileOf = (pw: number) => {
@@ -184,8 +199,8 @@ export function CalendarPage({ period }: { period?: string }) {
   const [pw, setPw] = useState(0);
 
   const bookRef = useRef<HTMLDivElement>(null);
-  const castL = useRef<HTMLDivElement>(null);
-  const castR = useRef<HTMLDivElement>(null);
+  const castL = useRef<Casts>([]);
+  const castR = useRef<Casts>([]);
   const leafRender = useRef<Render | null>(null);
   const pRef = useRef(0);
   const raf = useRef(0);
@@ -221,6 +236,7 @@ export function CalendarPage({ period }: { period?: string }) {
     if (anim || want === shown) return;
     const dir = ord(want) > ord(shown) ? 1 : -1;
     if (!wide || calm || !days || !pw) {
+      if (days) playFlip();
       setEnter(dir);
       setShown(want);
       return;
@@ -232,6 +248,7 @@ export function CalendarPage({ period }: { period?: string }) {
   useEffect(() => {
     if (anim?.mode !== 'auto') return;
     const to = anim.to;
+    playFlip();
     tween(pRef.current, 1, FLIP_MS, easeInOut, () => {
       setShown(to);
       setAnim(null);
@@ -270,19 +287,29 @@ export function CalendarPage({ period }: { period?: string }) {
     const width = bookRef.current.getBoundingClientRect().width;
     const sx = e.clientX;
     let moved = false;
+    let heard = false;
     pRef.current = 0;
     setAnim({ to, dir, mode: 'drag' });
+    const rustle = () => {
+      if (heard) return;
+      heard = true;
+      playFlip();
+    };
     const move = (ev: PointerEvent) => {
       if (Math.abs(ev.clientX - sx) > 5) moved = true;
       pRef.current = clamp01(((sx - ev.clientX) * dir) / (width * 0.8));
       leafRender.current?.(pRef.current);
+      // бумага зашелестела, как только лист по-настоящему пошёл
+      if (pRef.current > 0.1) rustle();
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
       const p = pRef.current;
-      if (!moved || p > 0.22)
+      const turn = !moved || p > 0.22;
+      if (turn) rustle();
+      if (turn)
         tween(p, 1, moved ? 450 + (1 - p) * 800 : FLIP_MS, moved ? easeOut : easeInOut, () => {
           setWant(to);
           setShown(to);
@@ -425,7 +452,7 @@ function StaticHalf({
   cornerLabel,
 }: {
   side: Side;
-  castRef: RefObject<HTMLDivElement | null>;
+  castRef: MutableRefObject<Casts>;
   children: ReactNode;
   onCorner?: (e: React.PointerEvent) => void;
   onCornerKey: () => void;
@@ -451,9 +478,18 @@ function StaticHalf({
               </View.Provider>
             )}
           </div>
+          {/* тень листа — во всех полосах, а не только в широкой: иначе у вертикали её самая
+              тёмная часть обрывалась резкой кромкой в 11% от корешка, а сам корешок оставался светлым */}
+          <div
+            className="cast"
+            style={{ left: pageLeft(side, STATIC_S[k], w, side === 'left') }}
+            ref={(el) => {
+              castRef.current[k] = el;
+            }}
+          />
           <div className="strip-shade" style={{ background: shadeGrad(STATIC_A, k, deg) }} />
         </div>
-        {main ? <div className="cast" ref={castRef} /> : build(k + 1)}
+        {!main && build(k + 1)}
       </div>
     );
   };
@@ -480,8 +516,8 @@ function Leaf({
   back: ReactNode;
   renderRef: MutableRefObject<Render | null>;
   pRef: MutableRefObject<number>;
-  origin: RefObject<HTMLDivElement | null>;
-  land: RefObject<HTMLDivElement | null>;
+  origin: MutableRefObject<Casts>;
+  land: MutableRefObject<Casts>;
 }) {
   const strips = useRef<(HTMLDivElement | null)[]>([]);
   const shades = useRef<(HTMLDivElement | null)[]>([]);
@@ -507,29 +543,43 @@ function Leaf({
         reach += LEAF_W[i] * Math.cos(A[i] * RAD);
         lift += LEAF_W[i] * Math.sin(A[i] * RAD);
       }
-      // тень листа: на исходной странице, пока он над ней, и на принимающей, пока он ложится;
-      // когда лист лёг, тень гаснет до нуля — без вспышки при подмене
-      const soft = clamp01((lift - LIFT0) * 4);
-      const o = origin.current;
-      const l = land.current;
-      if (o) {
-        o.style.width = `${clamp01(Math.max(0, reach) + 0.3 * (lift - LIFT0)) * 100}%`;
-        o.style.opacity = (0.55 * (1 - p) * soft).toFixed(3);
-      }
-      if (l) {
-        l.style.width = `${clamp01(Math.max(0, -reach) + 0.3 * (lift - LIFT0)) * 100}%`;
-        l.style.opacity = (0.6 * p * soft).toFixed(3);
-      }
+      // Тень листа на бумаге под ним. Свет сверху: под листом — плотное ядро, сразу за свободным
+      // краем — самая тёмная полоса, дальше полутень тает. Чем выше край, тем полутень шире и
+      // мягче, но не исчезает: раньше к вертикали тень гасла до ~0.1 и её не было видно совсем.
+      // Лёг — гаснет до нуля, без вспышки при подмене на неподвижную страницу.
+      // Поднятый край в перспективе виден дальше от корешка, чем его проекция, — тень сдвигается
+      // наружу вместе с ним (иначе прячется под листом).
+      const h = Math.max(0, lift - LIFT0);
+      const soft = clamp01(h * 6);
+      const spread = 0.07 + 0.36 * h;
+      const dark = soft * (1 - 0.28 * clamp01(h));
+      const shift = (x: number) => Math.max(0, x + 0.45 * h * Math.abs(x));
+      // доли ширины страницы от корешка; кусок тени в каждой полосе — копия во всю страницу
+      const pct = (x: number) => `${(x * 100).toFixed(2)}%`;
+      const cast = (cs: Casts, edge: number, weight: number) => {
+        const e = clamp01(edge);
+        const end = clamp01(e + spread);
+        const v = [pct(e), pct(e + (end - e) * 0.3), pct(e + (end - e) * 0.62), pct(end)];
+        const o = (dark * weight).toFixed(3);
+        for (const c of cs) {
+          if (!c) continue;
+          c.style.setProperty('--edge', v[0]);
+          c.style.setProperty('--mid', v[1]);
+          c.style.setProperty('--far', v[2]);
+          c.style.setProperty('--end', v[3]);
+          c.style.opacity = o;
+        }
+      };
+      // тень лежит с той стороны, куда наклонён лист; у вертикали — по обе стороны корешка
+      cast(origin.current, shift(reach), smooth(-0.3, 0.2, reach));
+      cast(land.current, shift(-reach), smooth(-0.3, 0.2, -reach));
     };
     renderRef.current = render;
     render(pRef.current);
+    const sides = [origin.current, land.current];
     return () => {
       renderRef.current = null;
-      for (const c of [origin.current, land.current]) {
-        if (!c) continue;
-        c.style.width = '0';
-        c.style.opacity = '0';
-      }
+      for (const c of sides.flat()) if (c) c.style.opacity = '0';
     };
   }, [dir, n, renderRef, pRef, origin, land]);
 
@@ -883,7 +933,7 @@ function SongCard({ day }: { day: DayRecord }) {
       </span>
       <Cassette />
       <span className="mt-[1.1cqw] line-clamp-2 block text-center font-serif leading-tight italic" style={{ fontSize: 'max(10px, 2.3cqw)' }}>
-        {day.song.artist ? `${day.song.artist} — ` : ''}
+        {songArtist(day.song) ? `${songArtist(day.song)} — ` : ''}
         {day.song.title}
       </span>
     </a>
@@ -966,7 +1016,7 @@ function MonthRight({ k, byDate, today }: Ctx & { k: string }) {
         <HandGrid rows={rows} seed={k} />
         <div className="relative grid h-full grid-cols-7" style={{ gridTemplateRows: `repeat(${rows}, 1fr)` }}>
           {cells.map((date, i) =>
-            date ? <Cell key={date} date={date} list={byDate.get(date)} today={today} col={i % 7} top={i < 7} /> : <span key={`e${i}`} />,
+            date ? <Cell key={date} date={date} list={byDate.get(date)} today={today} col={i % 7} row={Math.floor(i / 7)} /> : <span key={`e${i}`} />,
           )}
         </div>
       </div>
@@ -1039,7 +1089,8 @@ function HandGrid({ rows, seed }: { rows: number; seed: string }) {
   );
 }
 
-function Cell({ date, list, today, col, top }: { date: string; list?: DayRecord[]; today: string; col: number; top: boolean }) {
+function Cell({ date, list, today, col, row }: { date: string; list?: DayRecord[]; today: string; col: number; row: number }) {
+  const top = row === 0;
   const view = useContext(View);
   const lite = view !== null;
   if (view) {
@@ -1082,6 +1133,44 @@ function Cell({ date, list, today, col, top }: { date: string; list?: DayRecord[
   }
 
   const r = jitter(day.id, 5);
+
+  // несколько воспоминаний в один день: марки стопкой, при наведении (или касании) — веер из всех, выбирай любое
+  if (list.length > 1) {
+    const n = list.length;
+    const cw = n === 2 ? 17 : n === 3 ? 16 : n === 4 ? 15 : 14; // ширина снимка в веере, % страницы
+    const perRow = Math.min(n, 5);
+    const pickW = perRow * cw + (perRow - 1) * 1.2 + 2.4;
+    const [c0, c1] = colSpan(col);
+    const left = Math.min(96 - pickW, Math.max(4, ((c0 + c1) / 2) * 100 - pickW / 2)) - c0 * 100;
+    const down = row === 0 || (row === 1 && n > 5);
+    return (
+      <div
+        className="cell-day cell-multi relative outline-none hover:z-30 focus-within:z-30"
+        tabIndex={0}
+        aria-label={`${n} ${plural(n, 'воспоминание', 'воспоминания', 'воспоминаний')} за ${num}-е — выбрать`}
+      >
+        <span className="wash" style={vars({ '--c': day.style.palette.accent, '--r': `${jitter(`${day.id}w`, 40).toFixed(0)}deg` })} />
+        {numEl}
+        {isToday && <HandRing />}
+        <span className="stamp-zone">
+          {list[2] && <MiniStamp day={list[2]} r={r + 8} behind shift="8% -9%" />}
+          <MiniStamp day={list[1]} r={r - 7} behind />
+          <MiniStamp day={day} r={r} />
+        </span>
+        <span className="stamp-count" aria-hidden>
+          ×{n}
+        </span>
+        {!lite && (
+          <span className={`pick ${down ? 'pick-down' : ''}`} style={{ left: `${left.toFixed(2)}cqw`, width: `${pickW.toFixed(2)}cqw` }}>
+            {list.map((d, k) => (
+              <PickCard key={d.id} day={d} k={k} w={cw} />
+            ))}
+          </span>
+        )}
+      </div>
+    );
+  }
+
   return (
     <a href={`#/day/${day.id}`} className="cell-day relative hover:z-30 focus-visible:z-30" title={`${day.title} · ${MODES[day.style.mode].name}`}>
       <span className="wash" style={vars({ '--c': day.style.palette.accent, '--r': `${jitter(`${day.id}w`, 40).toFixed(0)}deg` })} />
@@ -1097,12 +1186,31 @@ function Cell({ date, list, today, col, top }: { date: string; list?: DayRecord[
   );
 }
 
-/** Почтовая марка с фото дня; второй день той же даты — марка под ней. */
-function MiniStamp({ day, r, behind }: { day: DayRecord; r: number; behind?: boolean }) {
+/** Снимок в веере дня с несколькими воспоминаниями — ведёт на своё воспоминание. */
+function PickCard({ day, k, w }: { day: DayRecord; k: number; w: number }) {
   const src = useFileUrl(day.cover ?? day.photos[0]);
   const p = day.style.palette;
   return (
-    <span className={`stamp-wrap ${behind ? 'stamp-behind' : ''}`} style={vars({ '--r': `${r.toFixed(1)}deg` })}>
+    <a
+      href={`#/day/${day.id}`}
+      className="pick-card"
+      title={`${day.title} · ${MODES[day.style.mode].name}`}
+      style={vars({ width: `${w}cqw`, '--r': `${((k % 2 ? 2.6 : -2.6) + jitter(day.id, 1.4)).toFixed(2)}deg` })}
+    >
+      <span className="bk-photo block" style={{ background: `linear-gradient(135deg, ${p.accent}, ${p.shades[1] ?? p.paper})` }}>
+        {src && <img src={src} alt="" draggable={false} />}
+      </span>
+      <span className="pick-cap">{day.title}</span>
+    </a>
+  );
+}
+
+/** Почтовая марка с фото дня; другие дни той же даты — марки под ней. */
+function MiniStamp({ day, r, behind, shift }: { day: DayRecord; r: number; behind?: boolean; shift?: string }) {
+  const src = useFileUrl(day.cover ?? day.photos[0]);
+  const p = day.style.palette;
+  return (
+    <span className={`stamp-wrap ${behind ? 'stamp-behind' : ''}`} style={vars({ '--r': `${r.toFixed(1)}deg`, ...(shift ? { translate: shift } : {}) })}>
       <span className="stamp-mini">
         <span style={{ background: `linear-gradient(135deg, ${p.accent}, ${p.shades[1] ?? p.paper})` }}>{src && <img src={src} alt="" draggable={false} />}</span>
       </span>

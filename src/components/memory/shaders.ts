@@ -322,8 +322,9 @@ void main() {
   // рваный край: фото «впитывается» в бумагу (импрессионизм, суми-э)
   if (uEdge > 0.01) {
     float e = min(min(vUv.x, 1.0 - vUv.x) * uFrameAspect, min(vUv.y, 1.0 - vUv.y));
-    float rough = fbm(vUv * vec2(uFrameAspect, 1.0) * 7.0 + uSeed) * 0.07 * uEdge;
-    float em = smoothstep(0.0, 0.035 * uEdge + 0.001, e - rough);
+    // кромка неровная, но узкая: фото на весь лист не должно терять края
+    float rough = fbm(vUv * vec2(uFrameAspect, 1.0) * 9.0 + uSeed) * 0.04 * uEdge;
+    float em = smoothstep(0.0, 0.02 * uEdge + 0.001, e - rough);
     col = mix(uPaper, col, em);
   }
 

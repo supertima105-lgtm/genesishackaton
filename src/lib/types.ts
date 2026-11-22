@@ -75,7 +75,20 @@ export interface SongInfo {
   excerptDuration?: number;
 }
 
-export type ModeId = 'impression' | 'kandinsky' | 'film' | 'ma' | 'collage';
+/** kandinsky и collage — прежние id «Экспрессии» и «Поп-арта»: так старые дни открываются без миграции. */
+export type ModeId =
+  | 'impression'
+  | 'kandinsky'
+  | 'film'
+  | 'ma'
+  | 'collage'
+  | 'watercolor'
+  | 'nocturne'
+  | 'cyanotype'
+  | 'sepia'
+  | 'impasto'
+  | 'hopper'
+  | 'turner';
 
 /** Оси настроения дня — общий «язык», на котором текст, фото и музыка договариваются. */
 export interface Axes {
@@ -125,6 +138,8 @@ export interface ShaderParams {
   halation: number;
   aberration: number;
   fade: number; // приподнятые тени, «выцветание»
+  /** волнистое искажение кадра (экспрессия); у старых дней поля нет — значит 0 */
+  ripple?: number;
 }
 
 export interface StyleParams {
@@ -156,7 +171,8 @@ export interface StyleParams {
     caption: 'hand' | 'grotesk' | 'serif' | 'mono';
   };
   shapes: {
-    kind: 'strokes' | 'geometry' | 'leaks' | 'enso' | 'cutouts';
+    /** geometry, enso и cutouts остались у старых дней, но больше не рисуются */
+    kind: 'strokes' | 'geometry' | 'leaks' | 'enso' | 'cutouts' | 'none';
     count: number;
     seed: number;
   };
@@ -187,6 +203,10 @@ export interface DayRecord {
   /** Устарело: озвучка убрана. Поле остаётся, чтобы при удалении старого дня стёрся и его файл. */
   voice?: FileRef;
   cover?: FileRef;
+  /** под какую раскладку страницы снята обложка: старые (4:5 с окном) переснимаются */
+  coverLayout?: number;
+  /** ширина / высота первого фото — лист страницы подстраивается под формат снимка */
+  photoAspect?: number;
   video?: FileRef;
   titleEdited?: boolean;
   /** «Не так ощущалось»: оси, которые человек поправил вручную. Пересборка их сохраняет. */

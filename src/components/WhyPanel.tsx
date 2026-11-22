@@ -2,6 +2,7 @@ import { ChevronDown, LoaderCircle, Mail, RotateCcw, Save } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, type CSSProperties } from 'react';
 import { FEEL_AXES } from '../lib/analysis/feel';
+import { emotionOf, EMOTIONS } from '../lib/rules/emotion';
 import { MODES } from '../lib/rules/modes';
 import type { Axes, DayFeel, DayRecord, FeelAxes } from '../lib/types';
 
@@ -43,6 +44,8 @@ export function WhyPanel({ day, tuning, feel }: { day: DayRecord; tuning?: Tunin
   const mode = MODES[day.style.mode];
   const second = MODES[day.style.secondary];
   const { palette } = day.style;
+  const emo = emotionOf(day);
+  const mood = EMOTIONS[emo.id];
 
   return (
     <div>
@@ -51,8 +54,12 @@ export function WhyPanel({ day, tuning, feel }: { day: DayRecord; tuning?: Tunin
         <span className="note text-[22px]">почерк: {mode.name}</span>
         <span className="font-mono text-[11px] text-ink-soft">{mode.reference}</span>
       </div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span className="note text-[22px]">настроение: {mood.name}</span>
+        <span className="font-mono text-[11px] text-ink-soft">{mood.material}</span>
+      </div>
 
-      {tuning && <p className="mt-5 font-mono text-xs text-ink-soft">не так? передвинь кружок</p>}
+      {tuning && <p className="mt-5 font-mono text-xs text-ink-soft">не так? передвинь кружок — страница сразу перестроится под твоё ощущение</p>}
       <div className={`${tuning ? 'mt-2' : 'mt-5'}`}>
         {AXES.map(({ key, left, right, signed }, i) => {
           const v = day.axes[key];
@@ -121,7 +128,16 @@ export function WhyPanel({ day, tuning, feel }: { day: DayRecord; tuning?: Tunin
         <p className="mt-1 text-sm text-ink-soft">
           Примесь: {second.name} · {Math.round(day.style.blend * 100)}%
         </p>
+        <p className="mt-3 text-sm">{mood.why}</p>
         <ul className="mt-4 space-y-3">
+          <li className="text-sm leading-snug">
+            <span className="label mr-2 inline-block w-16">текст</span>
+            <span>{emo.cues.length ? `в записи: ${emo.cues.map((c) => `«${c}»`).join(', ')}` : 'явных слов настроения нет — решили сигналы текста, песни и почерк кадра'}</span>
+            <span className="text-ink-soft">
+              {' '}
+              → {mood.name}: {mood.material}
+            </span>
+          </li>
           {day.reasons.filter((r) => !r.effect.startsWith('голос озвучки')).map((r, i) => (
             <li key={i} className="text-sm leading-snug">
               <span className={`label mr-2 inline-block w-16 ${r.source === 'вы' ? 'text-rust' : ''}`}>{r.source}</span>

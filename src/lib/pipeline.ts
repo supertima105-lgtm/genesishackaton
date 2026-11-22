@@ -7,7 +7,8 @@ import { lookupSong } from './songMeta';
 import { folderName, folderPath } from './folder';
 import { buildStyle } from './rules/engine';
 import { MODES } from './rules/modes';
-import { store } from './storage';
+import { LAYOUT_V } from '../components/memory/layout';
+import { patchDay, store } from './storage';
 import type { Axes, DayRecord, FileRef, MusicSignals, PhotoSignals, TextSignals, WeatherSignals } from './types';
 import { fetchWeather, getPosition, weatherShort } from './weather';
 
@@ -35,6 +36,16 @@ type Report = (s: Step) => void;
 
 /** Папка дня в хранилище: «2026-11-19_osenniy-park_ab12cd» — первый сегмент пути файлов. */
 export const baseOf = (day: DayRecord) => day.photos[0]?.path.split('/')[0] ?? day.id;
+
+/**
+ * Обложка для архива — снимок окна фото в почерке дня. Каждый раз под новым именем: уменьшенные
+ * копии в кэше привязаны к пути, и под прежним именем архив показывал бы старую картинку.
+ */
+export async function saveCover(day: DayRecord, blob: Blob) {
+  const ref = await store.putFile(`${baseOf(day)}/cover-${Date.now().toString(36)}.jpg`, blob);
+  const before = await patchDay(day.id, { cover: ref, coverLayout: LAYOUT_V });
+  if (before?.cover && before.cover.path !== ref.path) await store.removeFile(before.cover).catch(() => {});
+}
 
 // ── общие шаги ────────────────────────────────────────────────────
 
@@ -145,8 +156,10 @@ export async function createDay(input: NewDayInput, report: Report): Promise<Day
   const base = folderPath(input.date, text.title, id);
   report({ id: 'save', label: `Сохраняю в папку «${folder}»`, status: 'run' });
   const photos: FileRef[] = [];
+  let photoAspect: number | undefined;
   for (let i = 0; i < input.photos.length; i++) {
     const bmp = await decodeImage(input.photos[i]);
+    if (i === 0 && bmp.height) photoAspect = bmp.width / bmp.height;
     photos.push(await store.putFile(`${base}/photo-${i + 1}.jpg`, await resizeToJpeg(bmp)));
     bmp.close?.();
   }
@@ -160,6 +173,7 @@ export async function createDay(input: NewDayInput, report: Report): Promise<Day
     createdAt: new Date().toISOString(),
     text: input.text,
     photos,
+    photoAspect,
     song: {
       artist: input.artist,
       title: input.title,
@@ -220,8 +234,9 @@ export async function rebuildDay(old: DayRecord, report: Report): Promise<DayRec
 }
 
 // ── «не так ощущалось»: ручные оси, без сети ──────────────────────
+// Ощущение человека перестраивает почерк кадра, обработку фото и материал страницы.
 
-/** Страница дня с другими осями — мгновенно, для живого предпросмотра. */
+/** День с поправленными осями — мгновенно, без сети. */
 export function restyle(day: DayRecord, override: Partial<Axes>): DayRecord {
   const { text, photo, music, weather } = day.signals;
   const built = buildStyle(text, photo, music, day.id, weather, override);
@@ -235,9 +250,10 @@ export function systemAxes(day: DayRecord): Axes {
 }
 
 export async function retuneDay(old: DayRecord, override: Partial<Axes>, report: Report): Promise<DayRecord> {
-  const day: DayRecord = { ...restyle(old, override), cover: undefined, video: undefined };
+  // прежняя обложка снята в старом почерке: помечаем её устаревшей — снимется заново и заменит файл
+  const day = { ...restyle(old, override), coverLayout: undefined };
   await store.save(day);
-  report({ id: 'style', label: 'Пересобираю страницу по вашим осям', status: 'done', detail: `${MODES[day.style.mode].name} + ${MODES[day.style.secondary].name}` });
+  report({ id: 'style', label: 'Ощущение записано', status: 'done' });
   return day;
 }
 

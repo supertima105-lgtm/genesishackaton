@@ -1,37 +1,38 @@
 import { useId, useMemo, type CSSProperties, type ReactNode } from 'react';
 import { mulberry32 } from '../../lib/color';
 import type { StyleParams } from '../../lib/types';
-import { FRAMES } from './layout';
+import type { FrameBox } from './layout';
 
 interface Props {
   style: StyleParams;
   number: number;
+  /** окно фото на листе (cqw) — слой лежит на его высоте и во всю ширину листа */
+  frame: FrameBox;
 }
 
+/** 1 единица = 0,1 cqw: ширина листа — 1000. */
 const W = 1000;
-const H = 1250;
 
 /**
- * Графический слой поверх страницы: геометрия Кандинского, вырезки Матисса, мазки,
- * засветки плёнки или энсо. Форма генерируется из seed дня, цвет — из палитры фото. Слой неподвижен.
+ * Слой поверх страницы — только материальное: мазки краски, заходящие за край фото, и плёночная
+ * лента с засветкой. Геометрии (круги, линии, вырезки, энсо, печать) больше нет: у старых дней
+ * с такими видами графики слой просто пустой.
  */
-export function Shapes({ style, number }: Props) {
+export function Shapes({ style, number, frame }: Props) {
   const uid = useId().replace(/:/g, '');
-  const content = useMemo(() => render(style, uid, number), [style, uid, number]);
+  const fb = useMemo(() => ({ x: frame.x * 10, y: 0, w: frame.w * 10, h: frame.h * 10 }), [frame.x, frame.w, frame.h]);
+  const content = useMemo(() => render(style, uid, number, fb), [style, uid, number, fb]);
+  if (!content) return null;
 
   return (
     <svg
       data-shapes=""
-      viewBox={`0 0 ${W} ${H}`}
+      viewBox={`0 0 ${W} ${fb.h}`}
       preserveAspectRatio="none"
-      className="pointer-events-none absolute inset-0 h-full w-full"
-      style={{ mixBlendMode: style.palette.dark ? 'screen' : 'multiply', overflow: 'visible' }}
+      className="pointer-events-none absolute left-0 w-full"
+      style={{ top: `${frame.top}cqw`, height: `${frame.h}cqw`, mixBlendMode: style.palette.dark ? 'screen' : 'multiply', overflow: 'visible' }}
     >
       <defs>
-        <filter id={`rough-${uid}`}>
-          <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed={style.shapes.seed % 100} />
-          <feDisplacementMap in="SourceGraphic" scale="9" />
-        </filter>
         <filter id={`brush-${uid}`} x="-20%" y="-20%" width="140%" height="140%">
           <feTurbulence type="fractalNoise" baseFrequency="0.9 0.06" numOctaves="2" seed={style.shapes.seed % 97} result="n" />
           <feDisplacementMap in="SourceGraphic" in2="n" scale="18" result="d" />
@@ -53,90 +54,15 @@ const pulse = (amp: number): CSSProperties => ({
   transformBox: 'fill-box',
   transformOrigin: 'center',
 });
-const spin = (speed: number): CSSProperties => ({
-  transform: `rotate(calc(var(--t, 0) * ${speed}deg))`,
-  transformBox: 'fill-box',
-  transformOrigin: 'center',
-});
-const bob = (amp: number): CSSProperties => ({
-  transform: `translateY(calc((var(--p, 0) + var(--b, 0)) * ${-amp}px))`,
-});
 
-function frameBox(style: StyleParams) {
-  const f = FRAMES[style.layout.frame];
-  return { x: (f.x / 100) * W, y: (f.y / 100) * H, w: (f.w / 100) * W, h: (f.h / 100) * H };
-}
-
-function render(style: StyleParams, uid: string, number: number): ReactNode {
+function render(style: StyleParams, uid: string, number: number, fb: { x: number; y: number; w: number; h: number }): ReactNode {
   const r = mulberry32(style.shapes.seed);
-  const { accent, ink, shades, paper } = style.palette;
+  const { accent, shades, paper } = style.palette;
   const sh = (i: number) => shades[i % Math.max(1, shades.length)] ?? accent;
-  const fb = frameBox(style);
   const between = (a: number, b: number) => a + r() * (b - a);
 
   switch (style.shapes.kind) {
-    // ── Кандинский: круг, линии, треугольник, шахматка ────────────
-    case 'geometry': {
-      const cx = between(780, 900);
-      const cy = between(fb.y + 60, fb.y + fb.h * 0.55);
-      const R = between(95, 150);
-      const lines = Array.from({ length: 4 }, (_, i) => {
-        // линии не заходят в зону названия (72% листа) — текст остаётся постоянным и читаемым
-        const y1 = between(90, 820);
-        const y2 = Math.min(860, Math.max(90, y1 + between(-500, 500)));
-        return <line key={i} x1={-20} y1={y1} x2={1020} y2={y2} stroke={i === 0 ? accent : ink} strokeWidth={between(2, 9)} />;
-      });
-      const dots = Array.from({ length: 3 }, (_, i) => (
-        <g key={i} style={pulse(0.35)}>
-          <circle cx={between(fb.x + fb.w, 960)} cy={between(fb.y + fb.h * 0.6, fb.y + fb.h + 40)} r={between(10, 34)} fill={i === 0 ? ink : sh(i + 1)} />
-        </g>
-      ));
-      const tx = between(fb.x + fb.w - 40, 900);
-      const ty = between(fb.y + fb.h - 120, fb.y + fb.h + 20);
-      const ts = between(90, 140);
-      return (
-        <g>
-          {lines}
-          <g style={pulse(0.08)}>
-            <circle cx={cx} cy={cy} r={R} fill={accent} opacity={0.92} />
-          </g>
-          <circle cx={cx} cy={cy} r={R + 28} fill="none" stroke={ink} strokeWidth={4} />
-          <circle cx={cx - R * 0.35} cy={cy + R * 0.2} r={R * 0.28} fill={ink} opacity={0.9} />
-          <polygon points={`${tx},${ty} ${tx + ts},${ty + ts * 0.25} ${tx + ts * 0.3},${ty + ts}`} fill={sh(1)} opacity={0.88} />
-          <path d={`M ${cx - R - 60} ${cy + R + 70} a 70 70 0 0 1 140 0`} fill="none" stroke={accent} strokeWidth={10} />
-          {dots}
-          <g transform={`translate(${between(890, 920)}, ${fb.y + 10})`}>
-            {Array.from({ length: 9 }, (_, i) =>
-              (i + Math.floor(i / 3)) % 2 === 0 ? <rect key={i} x={(i % 3) * 20} y={Math.floor(i / 3) * 20} width={20} height={20} fill={ink} /> : null,
-            )}
-          </g>
-        </g>
-      );
-    }
-
-    // ── Матисс: вырезанные цветные формы ──────────────────────────
-    case 'cutouts': {
-      const anchors: [number, number][] = [
-        [fb.x - 10, fb.y + 50],
-        [fb.x + fb.w + 5, fb.y + fb.h * 0.3],
-        [fb.x + fb.w * 0.18, fb.y + fb.h + 10],
-        [fb.x + fb.w - 50, fb.y - 15],
-        [fb.x + fb.w * 0.95, fb.y + fb.h + 30],
-        [fb.x + 30, fb.y + fb.h * 0.62],
-      ];
-      const cols = [accent, sh(2), sh(0), ink, sh(3), accent];
-      return (
-        <g>
-          {anchors.slice(0, style.shapes.count).map(([x, y], i) => (
-            <g key={i} style={bob(i % 2 ? 16 : -12)}>
-              <path d={blob(x, y, between(48, 92), r, i % 3 === 1)} fill={cols[i]} opacity={0.94} transform={`rotate(${between(-30, 30)} ${x} ${y})`} />
-            </g>
-          ))}
-        </g>
-      );
-    }
-
-    // ── Моне: мазки, перетекающие за край фото ────────────────────
+    // ── мазки краски, перетекающие за край фото ───────────────────
     case 'strokes': {
       const edges: [number, number][] = [
         [fb.x + fb.w * 0.1, fb.y + fb.h + 10],
@@ -165,7 +91,7 @@ function render(style: StyleParams, uid: string, number: number): ReactNode {
       );
     }
 
-    // ── Плёнка: перфорация, засветка, номер кадра ─────────────────
+    // ── плёнка: перфорация, засветка, номер кадра ─────────────────
     case 'leaks': {
       const stripH = 46;
       const holes = (y: number) =>
@@ -189,50 +115,8 @@ function render(style: StyleParams, uid: string, number: number): ReactNode {
       );
     }
 
-    // ── Ма: энсо и красная печать ─────────────────────────────────
-    case 'enso': {
-      const cx = fb.x + fb.w / 2;
-      const cy = fb.y + fb.h / 2;
-      const R = Math.max(fb.w, fb.h) * 0.78;
-      const a0 = between(0, Math.PI * 2);
-      const a1 = a0 + Math.PI * 1.82;
-      const arc = (rad: number) =>
-        `M ${cx + Math.cos(a0) * rad} ${cy + Math.sin(a0) * rad} A ${rad} ${rad} 0 1 1 ${cx + Math.cos(a1) * rad} ${cy + Math.sin(a1) * rad}`;
-      return (
-        <g>
-          <g style={spin(0.4)} filter={`url(#rough-${uid})`}>
-            <path d={arc(R)} fill="none" stroke={ink} strokeWidth={15} strokeLinecap="round" opacity={0.85} />
-            <path d={arc(R + 9)} fill="none" stroke={ink} strokeWidth={4} strokeLinecap="round" opacity={0.4} />
-          </g>
-          <g transform="translate(872 892)">
-            <rect width={62} height={62} rx={5} fill="#b5352a" opacity={0.9} />
-            <text x={31} y={42} textAnchor="middle" fontFamily="Cormorant Garamond" fontWeight={600} fontSize={30} fill={paper}>
-              {number}
-            </text>
-          </g>
-        </g>
-      );
-    }
+    // геометрия Кандинского, вырезки Матисса, энсо с печатью — убраны
+    default:
+      return null;
   }
-}
-
-/** Гладкая неровная форма (Catmull-Rom → Безье). spiky — «звезда» Матисса. */
-function blob(cx: number, cy: number, R: number, rnd: () => number, spiky: boolean): string {
-  const n = spiky ? 12 : 8;
-  const pts = Array.from({ length: n }, (_, i) => {
-    const a = (i / n) * Math.PI * 2;
-    const rad = spiky ? R * (i % 2 ? 0.45 + rnd() * 0.15 : 0.95 + rnd() * 0.2) : R * (0.62 + rnd() * 0.42);
-    return [cx + Math.cos(a) * rad, cy + Math.sin(a) * rad];
-  });
-  let d = `M ${pts[0][0]} ${pts[0][1]}`;
-  for (let i = 0; i < n; i++) {
-    const p0 = pts[(i - 1 + n) % n];
-    const p1 = pts[i];
-    const p2 = pts[(i + 1) % n];
-    const p3 = pts[(i + 2) % n];
-    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
-    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
-    d += ` C ${c1[0]} ${c1[1]} ${c2[0]} ${c2[1]} ${p2[0]} ${p2[1]}`;
-  }
-  return d + ' Z';
 }

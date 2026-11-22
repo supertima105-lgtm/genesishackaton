@@ -33,7 +33,20 @@ export function folderPath(date: string, title: string, id: string) {
 /** Скачивает папку дня целиком: текст, фото, песня, обложка и объяснение стиля. */
 export async function exportFolderZip(day: DayRecord, store: Store): Promise<Blob> {
   const zip = new JSZip();
-  const dir = zip.folder(day.folder)!;
+  await fillDay(zip, day, store);
+  return zip.generateAsync({ type: 'blob' });
+}
+
+/** Папка архива целиком: внутри — папки всех её дней. */
+export async function exportCollectionZip(name: string, days: DayRecord[], store: Store): Promise<Blob> {
+  const zip = new JSZip();
+  const root = zip.folder(name.replace(/[\\/:*?"<>|]/g, '') || 'папка')!;
+  for (const d of days) await fillDay(root, d, store);
+  return zip.generateAsync({ type: 'blob' });
+}
+
+async function fillDay(parent: JSZip, day: DayRecord, store: Store) {
+  const dir = parent.folder(day.folder)!;
   dir.file('запись.txt', `${day.title}\n${day.date}\n\n${day.text}\n`);
 
   const photos = dir.folder('фото')!;
@@ -60,7 +73,6 @@ export async function exportFolderZip(day: DayRecord, store: Store): Promise<Blo
     ].join('\n'),
   );
   dir.file('стиль.json', JSON.stringify({ axes: day.axes, style: day.style, signals: day.signals }, null, 2));
-  return zip.generateAsync({ type: 'blob' });
 }
 
 export function downloadBlob(blob: Blob, name: string) {

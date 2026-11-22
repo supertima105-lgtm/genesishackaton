@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { store } from './storage';
+import { onDayChange, store } from './storage';
 import type { DayRecord } from './types';
 
 /** Номер дня в дневнике — порядковый по дате (как страницы в тетради). */
@@ -29,6 +29,8 @@ export function useDays() {
       .then(setDays)
       .catch((e) => setError(String(e.message ?? e)));
   }, []);
+  // новая обложка или формат фото, дописанные в фоне, — подменяем один день, без перезагрузки
+  useEffect(() => onDayChange((d) => setDays((l) => l && l.map((x) => (x.id === d.id ? d : x)))), []);
   return { days, error };
 }
 

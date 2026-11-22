@@ -1,10 +1,14 @@
 import { ChevronLeft, ChevronRight, Pause, Play, X } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { freshCover, sheetRatio } from '../components/memory/layout';
 import { formatDate, MemoryCard } from '../components/memory/MemoryCard';
+import { useDayAspect } from '../lib/aspect';
 import { usePlayer } from '../lib/player';
+import { useFolders } from '../lib/shelf';
 import { mostContrasting } from '../lib/rules/labels';
 import { MODES } from '../lib/rules/modes';
+import { songArtist, strayAudio, useSongPreview } from '../lib/songCover';
 import type { DayRecord } from '../lib/types';
 import { numberDays, plural, useDays, useFileUrls } from '../lib/useDays';
 
@@ -12,11 +16,12 @@ const SLIDE_SECONDS = 13;
 
 /** Стол под вечерней лампой — тот же стол, что и во всём дневнике, только свет приглушён. */
 const DESK: CSSProperties = {
-  backgroundColor: '#d9c7a7',
-  backgroundImage: 'radial-gradient(rgba(255,255,255,.18) 1px, transparent 1px), radial-gradient(rgba(0,0,0,.05) 1px, transparent 1px)',
+  // стол того же цвета, что и сайт: в тёмной теме он тёмный, а не бежевый островок
+  backgroundColor: 'var(--color-desk)',
+  backgroundImage: 'var(--desk-dots)',
   backgroundSize: '7px 7px, 11px 11px',
 };
-const LAMP = 'radial-gradient(ellipse 65% 60% at 40% 42%, rgba(255,226,170,.32), transparent 70%), radial-gradient(ellipse 120% 105% at 50% 45%, transparent 52%, rgba(45,26,10,.58) 100%)';
+const LAMP = 'var(--show-lamp)';
 
 /** Наклон отпечатка: каждый следующий день ложится на стопку чуть иначе. */
 const ROT = [-2.2, 1.8, -1.2, 2.4, -1.8, 1.2];
@@ -33,9 +38,13 @@ const SIDES: { id: Side; side: string; label: string }[] = [
  * своя страница. Отпечатки ложатся стопкой на стол, проигрыватель крутит пластинку в цвет дня.
  * Видно, что дневник один, а настроения разные.
  */
-export function ShowPage() {
-  const { days, error } = useDays();
-  const numbers = useMemo(() => numberDays(days ?? []), [days]);
+export function ShowPage({ folderId }: { folderId?: string }) {
+  const { days: all, error } = useDays();
+  const folderList = useFolders();
+  // показ папки — только её дни; номера страниц остаются сквозными по всему дневнику
+  const only = folderId ? folderList?.find((f) => f.id === folderId)?.dayIds : undefined;
+  const days = useMemo(() => (all && folderId ? (only ? all.filter((d) => only.includes(d.id)) : null) : all), [all, folderId, only]);
+  const numbers = useMemo(() => numberDays(all ?? []), [all]);
   const [order, setOrder] = useState<Side>('contrast');
   const [phase, setPhase] = useState<'intro' | 'play' | 'end'>('intro');
   const [i, setI] = useState(0);
@@ -83,7 +92,8 @@ export function ShowPage() {
   return (
     // стол показа — обычная страница дневника под шапкой, высотой с окно
     <div
-      className="relative h-[max(640px,calc(100vh-170px))] overflow-hidden rounded-[3px] text-ink shadow-[0_2px_0_rgba(0,0,0,.06),0_18px_40px_-24px_rgba(60,40,10,.6)]"
+      // пока пластинка стоит, высота ровно с окно; на обложке и в финале стол растёт вместе с содержимым — без своей прокрутки
+      className={`relative ${phase === 'play' ? 'h-[max(640px,calc(100vh-170px))]' : 'min-h-[max(640px,calc(100vh-170px))]'} overflow-hidden rounded-[3px] text-ink shadow-[0_2px_0_rgba(0,0,0,.06),0_18px_40px_-24px_rgba(60,40,10,.6)]`}
       style={DESK}
     >
       {/* свет лампы; во время показа к нему примешивается цвет дня */}
@@ -181,7 +191,7 @@ function useCover(day?: DayRecord) {
 function Intro({ list, order, setOrder, onStart, sideLabel }: { list: DayRecord[]; order: Side; setOrder: (s: Side) => void; onStart: () => void; sideLabel: string }) {
   const [out, setOut] = useState(false);
   return (
-    <div className="relative mx-auto grid h-full max-w-6xl items-center gap-10 overflow-y-auto px-6 py-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
+    <div className="relative mx-auto grid min-h-[max(640px,calc(100vh-170px))] max-w-6xl items-center gap-10 px-6 py-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
       <Album list={list} out={out} sideLabel={sideLabel} />
 
       <div>
@@ -227,10 +237,9 @@ function Intro({ list, order, setOrder, onStart, sideLabel }: { list: DayRecord[
                 type="button"
                 className="btn btn-solid px-5 text-[25px]"
                 onClick={onStart}
+                // пластинка выезжает и крутится только под курсором; фокус при входе (Enter — старт) её не трогает
                 onMouseEnter={() => setOut(true)}
                 onMouseLeave={() => setOut(false)}
-                onFocus={() => setOut(true)}
-                onBlur={() => setOut(false)}
                 autoFocus
               >
                 <Play size={17} fill="currentColor" /> Поставить пластинку
@@ -257,7 +266,7 @@ function TrackRow({ day, n }: { day: DayRecord; n: number }) {
       <span className="min-w-0 flex-1">
         <span className="block truncate font-hand text-[22px] leading-none font-semibold">{day.title}</span>
         <span className="block truncate font-serif text-[13px] text-ink-soft italic">
-          ♪ {day.song.artist ? `${day.song.artist} — ` : ''}
+          ♪ {songArtist(day.song) ? `${songArtist(day.song)} — ` : ''}
           {day.song.title}
         </span>
       </span>
@@ -357,13 +366,19 @@ interface TrackProps {
 }
 
 // стол ниже шапки сайта: отпечаток меряем по высоте стола, а не всего окна
-const PRINT_W = 'min(40vw, 660px, calc((max(640px, 100vh - 170px) - 150px) * 0.78))';
+/** Ширина отпечатка: лист в формате фото должен целиком поместиться на столе по высоте. */
+const printW = (ratio: number) => `min(${ratio > 1 ? 46 : 40}vw, ${ratio > 1 ? 760 : 660}px, calc((max(640px, 100vh - 170px) - 150px) * ${(ratio * 0.95).toFixed(3)}))`;
 
 function Track({ day, number, index, total, pile, paused, onProgress, onDone }: TrackProps) {
   const photoUrls = useFileUrls(day.photos);
-  const excerptUrl = useFileUrls(day.songFile ? [day.songFile] : undefined)?.[0];
-  const player = usePlayer(excerptUrl);
-  const ready = Boolean(photoUrls?.length) && (!day.songFile || Boolean(excerptUrl));
+  const aspect = useDayAspect(day);
+  // своя запись песни — играем её; песня ссылкой или названием — 30 секунд из каталога iTunes
+  // (не ждём сеть: фрагмент вступит, как только найдётся)
+  const songFile = day.songFile && !strayAudio(day.song) ? day.songFile : undefined;
+  const excerptUrl = useFileUrls(songFile ? [songFile] : undefined)?.[0];
+  const preview = useSongPreview(day, !songFile);
+  const player = usePlayer(excerptUrl ?? preview);
+  const ready = Boolean(photoUrls?.length) && (!songFile || Boolean(excerptUrl));
   const present = useIsPresent();
   const [started, setStarted] = useState(false);
 
@@ -422,7 +437,7 @@ function Track({ day, number, index, total, pile, paused, onProgress, onDone }: 
 
   return (
     <motion.div className="absolute inset-0 flex items-center justify-center gap-[4.5vw] px-8 pt-12 pb-20" style={{ zIndex: index + 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.32 }}>
-      <div className="relative shrink-0" style={{ width: PRINT_W }}>
+      <div className="relative shrink-0" style={{ width: printW(sheetRatio(day.style.layout.frame, aspect)) }}>
         {pile.map((d, j) => (
           <PilePrint key={d.id} day={d} r={rot(index - 1 - j)} depth={j} />
         ))}
@@ -471,7 +486,8 @@ function Print({ children, tape = 0 }: { children: React.ReactNode; tape?: numbe
 
 /** Прошлые дни остаются на столе стопкой под новым отпечатком. */
 function PilePrint({ day, r, depth }: { day: DayRecord; r: number; depth: number }) {
-  const cover = useFileUrls(day.cover ? [day.cover] : undefined);
+  const fresh = freshCover(day);
+  const cover = useFileUrls(fresh ? [fresh] : undefined);
   const first = useFileUrls(day.photos.slice(0, 1));
   return (
     <div
@@ -541,7 +557,7 @@ function Note({ day, index, total }: { day: DayRecord; index: number; total: num
         <span className="min-w-0 truncate font-mono text-[10px] tracking-wider text-ink-soft uppercase">{mode.reference}</span>
       </div>
       <p className="mt-3 font-serif text-[15px] italic">
-        ♪ {day.song.artist ? `${day.song.artist} — ` : ''}
+        ♪ {songArtist(day.song) ? `${songArtist(day.song)} — ` : ''}
         {day.song.title}
       </p>
       <p className="mt-1 font-mono text-[10.5px] tracking-wider text-ink-soft uppercase">
@@ -555,7 +571,7 @@ function Note({ day, index, total }: { day: DayRecord; index: number; total: num
 
 function End({ list, numbers, sideLabel, onAgain, onFlip }: { list: DayRecord[]; numbers: Map<string, number>; sideLabel: string; onAgain: () => void; onFlip: () => void }) {
   return (
-    <motion.div className="relative mx-auto flex h-full max-w-6xl flex-col justify-center overflow-y-auto px-6 py-10" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }}>
+    <motion.div className="relative mx-auto flex min-h-[max(640px,calc(100vh-170px))] max-w-6xl flex-col justify-center px-6 py-10" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }}>
       <h2 className="-rotate-1 font-hand text-[clamp(44px,5.4vw,76px)] leading-none font-bold text-blue">Сторона {sideLabel} закончилась</h2>
       <p className="mt-3 max-w-2xl text-lg text-ink-soft">
         Один дневник — {list.length} {plural(list.length, 'день', 'разных дня', 'разных дней')}. Формат один, а почерк и палитра у каждого дня свои.
@@ -584,7 +600,8 @@ function End({ list, numbers, sideLabel, onAgain, onFlip }: { list: DayRecord[];
 }
 
 function EndPrint({ day, number, k }: { day: DayRecord; number: number; k: number }) {
-  const cover = useFileUrls(day.cover ? [day.cover] : undefined);
+  const fresh = freshCover(day);
+  const cover = useFileUrls(fresh ? [fresh] : undefined);
   const first = useFileUrls(day.photos.slice(0, 1));
   return (
     <motion.a

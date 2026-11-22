@@ -48,6 +48,8 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
       setSongFound((s) => (s === 'link' || s === 'looking' || s === 'none' ? null : s));
       return;
     }
+    // вставили ссылку на свою песню — выбранная мелодия дневника больше не песня дня
+    if (preset) dropPreset();
     setSongFound('looking');
     let alive = true;
     const t = window.setTimeout(() => {
@@ -77,7 +79,14 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
   };
 
   const onAudio = async (f?: File) => {
+    // свой файл вместо мелодии дневника: имя и исполнитель мелодии ему не подходят
+    const presetName = LIBRARY.find((t) => t.id === preset)?.name;
     pickPreset(null);
+    if (f) {
+      if (artist === LIBRARY_ARTIST) setArtist('');
+      if (presetName && title === presetName) setTitle('');
+      if (presetName) touched.current = { artist: false, title: false };
+    }
     setAudio(f);
     if (f && !hasLink) applyMeta(await readAudioTags(f), 'file');
   };
@@ -91,6 +100,19 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
     setPreview(null);
   };
   useEffect(() => () => player.current?.pause(), []);
+  /**
+   * Своя песня вместо мелодии дневника: убираем файл мелодии и её имя, иначе у песни останется
+   * исполнитель «Атмосфера» и на странице дня заиграет мелодия, а не песня.
+   */
+  function dropPreset(keep?: 'artist' | 'title') {
+    const name = LIBRARY.find((t) => t.id === preset)?.name;
+    stopPreview();
+    setPreset(null);
+    setAudio(undefined);
+    if (keep !== 'artist' && artist === LIBRARY_ARTIST) setArtist('');
+    if (keep !== 'title' && name && title === name) setTitle('');
+    touched.current = { artist: keep === 'artist', title: keep === 'title' };
+  }
   const pickPreset = (id: string | null) => {
     if (!id) {
       if (preset) {
@@ -101,6 +123,8 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
       return;
     }
     if (preset === id && preview?.id === id) return stopPreview();
+    // мелодия дневника и есть песня дня — ссылка на другую песню больше не нужна
+    if (link) setLink('');
     setPreset(id);
     setPreview({ id, state: 'load' });
     void libraryFile(id).then((f) => {
@@ -258,13 +282,13 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
               className="field"
               placeholder="Исполнитель"
               value={artist}
-              onChange={(e) => ((touched.current.artist = true), setArtist(e.target.value))}
+              onChange={(e) => (preset && dropPreset('artist'), (touched.current.artist = true), setArtist(e.target.value))}
             />
             <input
               className="field"
               placeholder="Название"
               value={title}
-              onChange={(e) => ((touched.current.title = true), setTitle(e.target.value))}
+              onChange={(e) => (preset && dropPreset('title'), (touched.current.title = true), setTitle(e.target.value))}
             />
           </div>
           <p className="label mt-2 h-4 normal-case tracking-normal">
