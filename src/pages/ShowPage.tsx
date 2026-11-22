@@ -1,10 +1,8 @@
 import { ChevronLeft, ChevronRight, Pause, Play, X } from 'lucide-react';
 import { AnimatePresence, motion, useIsPresent } from 'motion/react';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { LiveMeter } from '../components/LiveMeter';
 import { formatDate, MemoryCard } from '../components/memory/MemoryCard';
 import { usePlayer } from '../lib/player';
-import { TRANSITION_RU } from '../lib/rules/engine';
 import { mostContrasting } from '../lib/rules/labels';
 import { MODES } from '../lib/rules/modes';
 import type { DayRecord } from '../lib/types';
@@ -66,18 +64,8 @@ export function ShowPage() {
   };
 
   useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, []);
-
-  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (phase === 'play') setPhase('intro');
-        else location.hash = '#/';
-      }
+      if (e.key === 'Escape' && phase === 'play') setPhase('intro');
       if (phase !== 'play') return;
       if (e.key === 'ArrowRight') go(1);
       if (e.key === 'ArrowLeft') go(-1);
@@ -93,7 +81,11 @@ export function ShowPage() {
   const current = phase === 'play' ? list[i] : undefined;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden text-ink" style={DESK}>
+    // стол показа — обычная страница дневника под шапкой, высотой с окно
+    <div
+      className="relative h-[max(640px,calc(100vh-170px))] overflow-hidden rounded-[3px] text-ink shadow-[0_2px_0_rgba(0,0,0,.06),0_18px_40px_-24px_rgba(60,40,10,.6)]"
+      style={DESK}
+    >
       {/* свет лампы; во время показа к нему примешивается цвет дня */}
       <div className="pointer-events-none absolute inset-0" style={{ background: LAMP }} />
       <AnimatePresence>
@@ -119,10 +111,7 @@ export function ShowPage() {
 
       {phase === 'play' && current && (
         <>
-          <div className="absolute top-5 right-8 left-8 z-[60] flex items-center justify-between font-hand text-[22px] text-ink-soft">
-            <span className="-rotate-1">Пластинка воспоминаний · сторона {side.side}</span>
-            <span className="rotate-1 text-lg">пробел — пауза · ← → — листать · Esc — выход</span>
-          </div>
+          <div className="absolute top-4 left-8 z-[60] -rotate-1 font-hand text-[22px] text-ink-soft">Пластинка воспоминаний · сторона {side.side}</div>
 
           <AnimatePresence>
             <Track
@@ -192,14 +181,11 @@ function useCover(day?: DayRecord) {
 function Intro({ list, order, setOrder, onStart, sideLabel }: { list: DayRecord[]; order: Side; setOrder: (s: Side) => void; onStart: () => void; sideLabel: string }) {
   const [out, setOut] = useState(false);
   return (
-    <div className="relative mx-auto grid h-full max-w-6xl items-center gap-10 overflow-y-auto px-6 py-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
+    <div className="relative mx-auto grid h-full max-w-6xl items-center gap-10 overflow-y-auto px-6 py-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-14">
       <Album list={list} out={out} sideLabel={sideLabel} />
 
       <div>
-        <a href="#/" className="font-hand text-xl text-ink-soft hover:text-ink">
-          ← в дневник
-        </a>
-        <h1 className="mt-1 -rotate-1 font-hand text-[clamp(44px,5.4vw,72px)] leading-[.95] font-bold text-blue">Пластинка воспоминаний</h1>
+        <h1 className="mt-1 -rotate-1 font-hand text-[clamp(40px,4.4vw,62px)] leading-[.95] font-bold text-blue">Пластинка воспоминаний</h1>
         <p className="mt-3 max-w-md text-ink-soft">Каждый день звучит своей песней. Поставь пластинку — и дни сменят друг друга, как треки.</p>
 
         <div className="mt-6 flex flex-wrap gap-2">
@@ -222,21 +208,21 @@ function Intro({ list, order, setOrder, onStart, sideLabel }: { list: DayRecord[
           </div>
         ) : (
           <>
-            <div className="sheet lined mt-6 rotate-[.4deg] px-5 py-4 pl-9">
+            <div className="sheet lined mt-5 rotate-[.4deg] px-5 py-4 pl-9">
               <div className="flex items-baseline justify-between">
                 <span className="font-hand text-[26px] leading-none font-bold">Сторона {sideLabel}</span>
                 <span className="font-mono text-[11px] text-ink-soft">
                   {list.length} {plural(list.length, 'трек', 'трека', 'треков')} · {Math.round((list.length * SLIDE_SECONDS) / 6) / 10} мин
                 </span>
               </div>
-              <ol className="mt-2 max-h-[34vh] space-y-1 overflow-y-auto pr-1">
+              <ol className="mt-2 max-h-[26vh] space-y-1 overflow-y-auto pr-1">
                 {list.map((d, k) => (
                   <TrackRow key={d.id} day={d} n={k + 1} />
                 ))}
               </ol>
             </div>
 
-            <div className="mt-7 flex flex-wrap items-center gap-4">
+            <div className="mt-5 flex flex-wrap items-center gap-4">
               <button
                 type="button"
                 className="btn btn-solid px-5 text-[25px]"
@@ -370,12 +356,13 @@ interface TrackProps {
   onDone: () => void;
 }
 
-const PRINT_W = 'min(44vw, calc((100vh - 170px) * 0.78))';
+// стол ниже шапки сайта: отпечаток меряем по высоте стола, а не всего окна
+const PRINT_W = 'min(40vw, 660px, calc((max(640px, 100vh - 170px) - 150px) * 0.78))';
 
 function Track({ day, number, index, total, pile, paused, onProgress, onDone }: TrackProps) {
   const photoUrls = useFileUrls(day.photos);
   const excerptUrl = useFileUrls(day.songFile ? [day.songFile] : undefined)?.[0];
-  const player = usePlayer(day, excerptUrl);
+  const player = usePlayer(excerptUrl);
   const ready = Boolean(photoUrls?.length) && (!day.songFile || Boolean(excerptUrl));
   const present = useIsPresent();
   const [started, setStarted] = useState(false);
@@ -448,7 +435,7 @@ function Track({ day, number, index, total, pile, paused, onProgress, onDone }: 
         >
           <Print>
             {photoUrls && photoUrls.length > 0 ? (
-              <MemoryCard day={day} number={number} photoUrls={photoUrls} live clock={player.clock} playKey={player.playKey} />
+              <MemoryCard day={day} number={number} photoUrls={photoUrls} live />
             ) : (
               <div className="aspect-[4/5] w-full" style={{ background: day.style.palette.paper }} />
             )}
@@ -457,13 +444,13 @@ function Track({ day, number, index, total, pile, paused, onProgress, onDone }: 
       </div>
 
       <motion.aside
-        className="hidden w-[min(400px,29vw)] shrink-0 xl:block"
+        className="hidden w-[min(320px,24vw)] shrink-0 xl:block"
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.35, duration: 0.7 }}
       >
         <Turntable day={day} spinning={spinning} />
-        <Note day={day} index={index} total={total} clock={player.clock} />
+        <Note day={day} index={index} total={total} />
       </motion.aside>
     </motion.div>
   );
@@ -503,7 +490,7 @@ function Turntable({ day, spinning }: { day: DayRecord; spinning: boolean }) {
   const accent = day.style.palette.accent;
   return (
     <div
-      className="relative aspect-[1.18] w-full rounded-[12px] shadow-[0_26px_44px_-20px_rgba(35,18,5,.8),inset_0_1px_0_rgba(255,220,170,.25)]"
+      className="relative mx-auto aspect-[1.18] w-[82%] rounded-[12px] shadow-[0_26px_44px_-20px_rgba(35,18,5,.8),inset_0_1px_0_rgba(255,220,170,.25)]"
       style={{ background: 'linear-gradient(135deg, #8a5733, #5a341b 55%, #43260f)' }}
     >
       <div className="absolute inset-[3.5%] rounded-[7px] shadow-[inset_0_2px_6px_rgba(0,0,0,.5)]" style={{ background: 'linear-gradient(160deg, #3d3631, #1e1a17)' }} />
@@ -533,15 +520,15 @@ function Turntable({ day, spinning }: { day: DayRecord; spinning: boolean }) {
 }
 
 /** Записка под проигрывателем: что это был за день и как система его прочитала. */
-function Note({ day, index, total, clock }: { day: DayRecord; index: number; total: number; clock: ReturnType<typeof usePlayer>['clock'] }) {
+function Note({ day, index, total }: { day: DayRecord; index: number; total: number }) {
   const mode = MODES[day.style.mode];
   const m = day.style.motion;
   return (
-    <div className="sheet relative mt-6 rotate-[1deg] px-6 pt-5 pb-5">
+    <div className="sheet relative mt-4 rotate-[1deg] px-5 pt-4 pb-4">
       <div className="font-hand text-[19px] leading-none text-ink-soft">
         трек {index + 1} из {total} · {formatDate(day.date).long}
       </div>
-      <h2 className="mt-1.5 font-hand text-[38px] leading-[.95] font-bold">{day.title}</h2>
+      <h2 className="mt-1.5 font-hand text-[32px] leading-[.95] font-bold">{day.title}</h2>
       {day.signals.text.caption && <p className="mt-1.5 font-serif text-[15px] leading-snug text-ink-soft italic">{day.signals.text.caption}</p>}
       <div className="mt-4 flex items-center gap-4">
         <span
@@ -558,11 +545,8 @@ function Note({ day, index, total, clock }: { day: DayRecord; index: number; tot
         {day.song.title}
       </p>
       <p className="mt-1 font-mono text-[10.5px] tracking-wider text-ink-soft uppercase">
-        {Math.round(m.bpm)} BPM → кадр каждые {m.beatsPerShot} доли · {TRANSITION_RU[m.transition]}
+        {Math.round(m.bpm)} BPM · {day.signals.music.mode === 'major' ? 'мажор' : 'минор'}
       </p>
-      <div className="mt-4">
-        <LiveMeter clock={clock} style={day.style} />
-      </div>
     </div>
   );
 }
@@ -574,7 +558,7 @@ function End({ list, numbers, sideLabel, onAgain, onFlip }: { list: DayRecord[];
     <motion.div className="relative mx-auto flex h-full max-w-6xl flex-col justify-center overflow-y-auto px-6 py-10" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }}>
       <h2 className="-rotate-1 font-hand text-[clamp(44px,5.4vw,76px)] leading-none font-bold text-blue">Сторона {sideLabel} закончилась</h2>
       <p className="mt-3 max-w-2xl text-lg text-ink-soft">
-        Один дневник — {list.length} {plural(list.length, 'день', 'разных дня', 'разных дней')}. Формат один, а почерк, палитра и ритм у каждого дня свои.
+        Один дневник — {list.length} {plural(list.length, 'день', 'разных дня', 'разных дней')}. Формат один, а почерк и палитра у каждого дня свои.
       </p>
       <div className="mt-10 flex gap-5 overflow-x-auto px-2 pt-4 pb-6">
         {list.map((d, k) => (

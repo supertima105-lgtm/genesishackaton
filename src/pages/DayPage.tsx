@@ -1,28 +1,11 @@
-import {
-  ChevronLeft,
-  ChevronRight,
-  Clapperboard,
-  Columns2,
-  Download,
-  Film,
-  Folder,
-  Pause,
-  Pencil,
-  Play,
-  RefreshCw,
-  RotateCcw,
-  Trash2,
-  X,
-} from 'lucide-react';
+import { Columns2, Download, Folder, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LiveMeter } from '../components/LiveMeter';
 import { formatDate, MemoryCard } from '../components/memory/MemoryCard';
 import { SongPlayer } from '../components/SongPlayer';
 import { StepList } from '../components/StepList';
 import { WhyPanel } from '../components/WhyPanel';
 import { downloadBlob, exportFolderZip, folderName } from '../lib/folder';
 import { baseOf, rebuildDay, restyle, retuneDay, systemAxes, type Step } from '../lib/pipeline';
-import { usePlayer } from '../lib/player';
 import { lookupSong } from '../lib/songMeta';
 import { store } from '../lib/storage';
 import { computeFeel, quickFeel } from '../lib/analysis/feel';
@@ -35,9 +18,8 @@ const overrideKey = (o: Partial<Axes>) =>
       .map((k) => [k, Math.round((o[k as keyof Axes] as number) * 100)]),
   );
 import { localToday, numberDays, plural, useFileUrls } from '../lib/useDays';
-import { recordMemory, videoMime } from '../lib/video';
 
-export function DayPage({ id, kino }: { id: string; kino: boolean }) {
+export function DayPage({ id }: { id: string }) {
   const [day, setDay] = useState<DayRecord | null | undefined>(undefined);
   const [nav, setNav] = useState<{ number: number; prev?: DayRecord; next?: DayRecord }>({ number: 0 });
   useEffect(() => {
@@ -59,7 +41,7 @@ export function DayPage({ id, kino }: { id: string; kino: boolean }) {
         Такого дня нет в дневнике. <a href="#/" className="underline">В архив</a>
       </p>
     );
-  return <DayView key={day.id} day={day} onChange={setDay} kino={kino} {...nav} />;
+  return <DayView key={day.id} day={day} onChange={setDay} {...nav} />;
 }
 
 interface ViewProps {
@@ -68,19 +50,13 @@ interface ViewProps {
   number: number;
   prev?: DayRecord;
   next?: DayRecord;
-  kino: boolean;
 }
 
-function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
+function DayView({ day, onChange, number, prev, next }: ViewProps) {
   const photoUrls = useFileUrls(day.photos);
   const excerptUrl = useFileUrls(day.songFile ? [day.songFile] : undefined)?.[0];
-  const videoUrl = useFileUrls(day.video ? [day.video] : undefined)?.[0];
 
-  const cardRef = useRef<HTMLDivElement>(null);
-  // Часы страницы: время и живой звук — из фрагмента песни (его отдаёт плеер с волной), иначе собственный таймер.
-  const { clock, playing, playKey, media: mediaRef, bindMedia: onMedia, pause, toggle, restart } = usePlayer(day);
-  const [busy, setBusy] = useState<null | 'zip' | 'video' | 'rebuild' | 'tune'>(null);
-  const [progress, setProgress] = useState(0);
+  const [busy, setBusy] = useState<null | 'zip' | 'rebuild' | 'tune'>(null);
   const [steps, setSteps] = useState<Step[]>([]);
   const [editing, setEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState(day.title);
@@ -98,40 +74,6 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
       if (Math.abs(base[k] - v) < 0.015) delete n[k]; // вернули на место системы — это не поправка
       return n;
     });
-
-  // ── кинорежим ────────────────────────────────────────────────
-  const exitKino = useCallback(() => (location.hash = `#/day/${day.id}`), [day.id]);
-  const go = useCallback((d?: DayRecord) => d && (location.hash = `#/day/${d.id}${kino ? '/kino' : ''}`), [kino]);
-  useEffect(() => {
-    if (!kino) return;
-    document.body.style.overflow = 'hidden';
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') exitKino();
-      if (e.key === 'ArrowRight') go(next);
-      if (e.key === 'ArrowLeft') go(prev);
-      if (e.key === ' ') {
-        e.preventDefault();
-        toggle();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => {
-      document.body.style.overflow = '';
-      window.removeEventListener('keydown', onKey);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kino, next, prev, exitKino, go]);
-
-  // в кино день начинает жить сам — с музыкой
-  const autoStarted = useRef(false);
-  useEffect(() => {
-    if (!kino || autoStarted.current || !photoUrls?.length) return;
-    if (day.songFile && !excerptUrl) return; // ждём фрагмент песни
-    autoStarted.current = true;
-    const a = window.setTimeout(restart, 700);
-    return () => window.clearTimeout(a);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kino, photoUrls, excerptUrl]);
 
   // ── обложка ──────────────────────────────────────────────────
   const coverSaved = useRef(Boolean(day.cover));
@@ -252,7 +194,6 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
     }
   };
   const rebuild = async () => {
-    pause();
     setBusy('rebuild');
     setSteps([]);
     try {
@@ -268,35 +209,6 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
       setBusy(null);
     }
   };
-  const makeVideo = async () => {
-    if (!cardRef.current) return;
-    setBusy('video');
-    setProgress(0);
-    try {
-      const m = mediaRef.current;
-      const seconds = Math.min(30, m && Number.isFinite(m.duration) && m.duration > 0 ? m.duration - 0.3 : 16);
-      if (m) {
-        m.loop = false;
-        m.currentTime = 0;
-      }
-      restart();
-      const blob = await recordMemory({ card: cardRef.current, media: m, day, number, seconds, onProgress: setProgress });
-      pause();
-      if (m) m.loop = true;
-      const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
-      const ref = await store.putFile(`${baseOf(day)}/memory.${ext}`, blob);
-      const latest = (await store.get(day.id)) ?? day;
-      const next = { ...latest, video: ref };
-      await store.save(next);
-      onChange(next);
-      downloadBlob(blob, `${day.folder}.${ext}`);
-    } catch (e) {
-      alert(`Не удалось записать видео: ${(e as Error).message}`);
-    } finally {
-      setBusy(null);
-    }
-  };
-
   const date = formatDate(day.date);
   const files = [
     'запись.txt',
@@ -307,91 +219,31 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
     'почему-так.txt',
     'стиль.json',
   ].filter(Boolean);
-  const backdrop = `color-mix(in oklab, ${day.style.palette.paper} 14%, #0c0b0a)`;
   const stampDate = new Date(day.date + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }).replace('.', '');
 
   return (
     <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
       <div className="min-w-0">
-        <div
-          className={kino ? 'fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 p-4' : 'pt-3 lg:sticky lg:top-6'}
-          style={kino ? { background: backdrop, transition: 'background .6s' } : undefined}
-        >
-          {/* вне кино карточка дня — полароид на скотче; в кино рамки нет */}
-          <div className={kino ? 'contents' : 'polaroid mx-auto max-w-[480px] -rotate-[1.2deg]'}>
-          {!kino && (
-            <>
-              <span className="tape -top-3 left-10 -rotate-6" />
-              <span className="tape tape-blue -top-2 right-8 rotate-[8deg]" />
-            </>
-          )}
-          <div ref={cardRef} className="relative w-full" style={kino ? { width: 'min(92vw, calc((100vh - 120px) * 0.8))' } : undefined}>
+        <div className="pt-3 lg:sticky lg:top-6">
+          {/* карточка дня — полароид на скотче */}
+          <div className="polaroid mx-auto max-w-[480px] -rotate-[1.2deg]">
+            <span className="tape -top-3 left-10 -rotate-6" />
+            <span className="tape tape-blue -top-2 right-8 rotate-[8deg]" />
             {photoUrls && photoUrls.length > 0 ? (
-              <MemoryCard
-                day={view}
-                number={number}
-                photoUrls={photoUrls}
-                live
-                clock={clock}
-                playKey={playKey}
-                onCover={day.cover || dirty ? undefined : onCover}
-                coverKey={coverKey}
-              />
+              <MemoryCard day={view} number={number} photoUrls={photoUrls} live onCover={day.cover || dirty ? undefined : onCover} coverKey={coverKey} />
             ) : (
-              <div className="aspect-[4/5] w-full animate-pulse" style={{ background: day.style.palette.paper }} />
+              <div className="aspect-[4/5] w-full" style={{ background: day.style.palette.paper }} />
             )}
-            {busy === 'video' && (
-              <div className="absolute inset-x-0 bottom-0 h-1 bg-black/20">
-                <div className="h-full bg-rust transition-[width]" style={{ width: `${progress * 100}%` }} />
-              </div>
-            )}
-          </div>
-          {!kino && (
             <div className="pointer-events-none absolute inset-x-3 bottom-2 truncate text-center font-hand text-[26px] leading-tight text-blue">
               {day.signals.text.moodWords.join(' · ')}
             </div>
-          )}
           </div>
 
-          {kino ? (
-            <div className="flex items-center gap-2 text-paper">
-              <button type="button" className="btn border-paper/40 bg-transparent text-paper shadow-none hover:bg-white/10" onClick={() => go(prev)} disabled={!prev} aria-label="Предыдущий день">
-                <ChevronLeft size={14} />
-              </button>
-              <button type="button" className="btn border-paper/40 bg-transparent text-paper shadow-none hover:bg-white/10" onClick={toggle}>
-                {playing ? <Pause size={14} /> : <Play size={14} />}
-              </button>
-              <button type="button" className="btn border-paper/40 bg-transparent text-paper shadow-none hover:bg-white/10" onClick={() => go(next)} disabled={!next} aria-label="Следующий день">
-                <ChevronRight size={14} />
-              </button>
-              <button type="button" className="btn border-paper/40 bg-transparent text-paper shadow-none hover:bg-white/10" onClick={exitKino} aria-label="Выйти из кинорежима">
-                <X size={14} />
-              </button>
-              <div className="ml-4 hidden sm:block">
-                <LiveMeter clock={clock} style={view.style} light />
-              </div>
-            </div>
-          ) : (
-            <>
-            <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
-              <button type="button" className="btn btn-solid" onClick={toggle} disabled={busy === 'video'}>
-                {playing ? <Pause size={14} /> : <Play size={14} />} {playing ? 'Пауза' : 'Прожить день'}
-              </button>
-              <button type="button" className="btn" onClick={restart} aria-label="С начала" disabled={busy === 'video'}>
-                <RotateCcw size={14} />
-              </button>
-              <a href={`#/day/${day.id}/kino`} className="btn">
-                <Clapperboard size={14} /> Кино
-              </a>
-              <a href={`#/compare/${day.id}`} className="btn" title="Сравнить с другим днём">
-                <Columns2 size={14} />
-              </a>
-            </div>
-            <div className="mt-5 flex justify-center">
-              <LiveMeter clock={clock} style={view.style} />
-            </div>
-            </>
-          )}
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
+            <a href={`#/compare/${day.id}`} className="btn" title="Сравнить с другим днём">
+              <Columns2 size={14} /> Сравнить с другим днём
+            </a>
+          </div>
         </div>
       </div>
 
@@ -429,7 +281,7 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
         {day.signals.text.caption && <div className="note mt-6 max-w-full">{day.signals.text.caption}</div>}
 
         <div className="mt-10 max-w-md">
-          <SongPlayer day={day} excerptUrl={excerptUrl} onMedia={onMedia} playing={playing} />
+          <SongPlayer day={day} excerptUrl={excerptUrl} />
         </div>
 
         <div className="mt-12">
@@ -455,17 +307,7 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
               <div className="mt-1 flex items-center gap-2 font-mono text-sm" title={files.join('\n')}>
                 <Folder size={16} className="shrink-0 text-blue" /> {day.folder} <span className="text-ink-soft">· {files.length} файлов</span>
               </div>
-              {videoUrl && <video src={videoUrl} controls className="mt-3 w-40 border border-line" />}
               <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={makeVideo}
-                  disabled={Boolean(busy) || dirty || !photoUrls?.length || !videoMime()}
-                  title={dirty ? 'Сначала сохраните поправленные оси' : undefined}
-                >
-                  <Film size={14} /> {busy === 'video' ? `Записываю… ${Math.round(progress * 100)}%` : day.video ? 'Перезаписать видео' : 'Видео'}
-                </button>
                 <button type="button" className="btn" onClick={download} disabled={Boolean(busy)}>
                   <Download size={14} /> {busy === 'zip' ? 'Собираю…' : 'Папка .zip'}
                 </button>
@@ -476,7 +318,6 @@ function DayView({ day, onChange, number, prev, next, kino }: ViewProps) {
                   <Trash2 size={14} />
                 </button>
               </div>
-              {busy === 'video' && <p className="label mt-2 normal-case tracking-normal">Не переключайте вкладку, пока идёт запись.</p>}
               {steps.length > 0 && (
                 <div className="mt-4">
                   <StepList steps={steps} />

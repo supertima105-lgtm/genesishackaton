@@ -11,19 +11,3 @@ export const FRAMES: Record<StyleParams['layout']['frame'], { x: number; y: numb
 
 /** Где начинается блок с названием — одинаково для всех дней. */
 export const TITLE_TOP = 72;
-
-export interface Clock {
-  time(): number;
-  playing(): boolean;
-  /** Живые уровни звука (бас, громкость, верх, удар); нет — страница живёт только в доли. */
-  levels?(): { level: number; bass: number; high: number; hit: number };
-}
-
-export const stillClock: Clock = { time: () => 0, playing: () => false };
-
-/** 1 в момент доли, плавно спадает до 0 к следующей. */
-export function beatPulse(t: number, bpm: number, offset: number) {
-  const len = 60 / bpm;
-  const ph = ((((t - offset) / len) % 1) + 1) % 1;
-  return Math.exp(-ph * 5);
-}

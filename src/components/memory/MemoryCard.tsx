@@ -1,22 +1,19 @@
-import { motion } from 'motion/react';
 import type { CSSProperties } from 'react';
 import { MODES } from '../../lib/rules/modes';
 import type { DayRecord } from '../../lib/types';
-import { FRAMES, TITLE_TOP, type Clock } from './layout';
+import { weatherShort } from '../../lib/weather';
+import { FRAMES, TITLE_TOP } from './layout';
 import { PhotoLayer } from './PhotoLayer';
 import { Shapes } from './Shapes';
 import { WeatherLayer } from './WeatherLayer';
-import { weatherShort } from '../../lib/weather';
 
 interface Props {
   day: DayRecord;
   number: number;
   photoUrls: string[];
   coverUrl?: string;
-  /** live — WebGL и анимация; иначе статичная обложка (для архива). */
+  /** live — фото рисуется шейдером в почерке дня (страница дня, показ, сравнение); иначе — готовая обложка. */
   live?: boolean;
-  clock?: Clock;
-  playKey?: number;
   onCover?: (b: Blob) => void;
   coverKey?: number;
 }
@@ -40,15 +37,14 @@ export function formatDate(iso: string) {
 /**
  * Страница дневника. Постоянные элементы: формат 4:5, шапка с датой и номером,
  * блок названия на одной высоте, подвал с песней, бумага. Переменные: окно фото,
- * обработка, графический слой, шрифт подписи, ритм.
+ * обработка, графический слой, шрифт подписи. Страница неподвижна.
  */
-export function MemoryCard({ day, number, photoUrls, coverUrl, live, clock, playKey = 0, onCover, coverKey }: Props) {
+export function MemoryCard({ day, number, photoUrls, coverUrl, live, onCover, coverKey }: Props) {
   const { style } = day;
-  const { paper, ink, accent } = style.palette;
+  const { paper, ink } = style.palette;
   const f = FRAMES[style.layout.frame];
   const date = formatDate(day.date);
   const mode = MODES[style.mode];
-  const animate = live && playKey > 0;
   const stillSrc = coverUrl ?? photoUrls[0];
 
   return (
@@ -69,15 +65,15 @@ export function MemoryCard({ day, number, photoUrls, coverUrl, live, clock, play
           background: paper,
         }}
       >
-        {live && clock ? (
-          <PhotoLayer urls={photoUrls} style={style} clock={clock} seed={style.shapes.seed} beatOffset={day.signals.music.beatOffset} onCover={onCover} coverKey={coverKey} />
+        {live && photoUrls[0] ? (
+          <PhotoLayer url={photoUrls[0]} style={style} seed={style.shapes.seed} onCover={onCover} coverKey={coverKey} />
         ) : stillSrc ? (
           <img src={stillSrc} alt="" className="h-full w-full object-cover" style={{ filter: coverUrl ? undefined : cssApprox(day) }} draggable={false} />
         ) : null}
-        <WeatherLayer weather={style.weather} animate={Boolean(live)} />
+        <WeatherLayer weather={style.weather} animate={false} />
       </div>
 
-      <Shapes style={style} clock={live ? clock : undefined} beatOffset={day.signals.music.beatOffset} number={number} />
+      <Shapes style={style} number={number} />
 
       {/* шапка — постоянная */}
       <div
@@ -93,25 +89,8 @@ export function MemoryCard({ day, number, photoUrls, coverUrl, live, clock, play
 
       {/* название и подпись — постоянная позиция */}
       <div className="absolute" style={{ left: '7%', right: style.shapes.kind === 'enso' ? '17%' : '7%', top: `${TITLE_TOP}%` }}>
-        <motion.h2
-          key={`t-${playKey}`}
-          style={{ fontFamily: '"Cormorant Garamond", serif', fontWeight: 500, fontSize: '6.3cqw', lineHeight: 1.02, letterSpacing: '-0.01em' }}
-          initial={animate ? 'hidden' : false}
-          animate="show"
-          variants={{ show: { transition: { staggerChildren: 0.14 } } }}
-        >
-          {day.title.split(' ').map((w, i) => (
-            <motion.span
-              key={i}
-              className="inline-block"
-              style={{ marginRight: '0.24em' }}
-              variants={{ hidden: { opacity: 0, y: 10, filter: 'blur(8px)' }, show: { opacity: 1, y: 0, filter: 'blur(0px)', transition: { duration: 0.9 } } }}
-            >
-              {w}
-            </motion.span>
-          ))}
-        </motion.h2>
-        <Caption key={`c-${playKey}`} text={day.signals.text.caption} type={style.type.caption} animate={animate} accent={accent} beat={60 / style.motion.bpm} />
+        <h2 style={{ fontFamily: '"Cormorant Garamond", serif', fontWeight: 500, fontSize: '6.3cqw', lineHeight: 1.02, letterSpacing: '-0.01em' }}>{day.title}</h2>
+        <p style={{ ...CAPTION_FONT[style.type.caption], marginTop: '1.6cqw' }}>{day.signals.text.caption}</p>
       </div>
 
       {/* подвал — постоянный */}
@@ -128,60 +107,35 @@ export function MemoryCard({ day, number, photoUrls, coverUrl, live, clock, play
         </span>
       </div>
 
-      {/* бумага — постоянная фактура дневника */}
-      <svg className="pointer-events-none absolute inset-0 h-full w-full" style={{ mixBlendMode: style.palette.dark ? 'screen' : 'multiply', opacity: style.palette.dark ? 0.06 : 0.12 }}>
-        <filter id={`paper-${day.id}`}>
-          <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch" />
-          <feColorMatrix type="saturate" values="0" />
-        </filter>
-        <rect width="100%" height="100%" filter={`url(#paper-${day.id})`} />
-      </svg>
+      {/* одна общая текстура на все карточки: SVG-фильтр шума на каждой карточке тормозил архив */}
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{ backgroundImage: `url(${paperGrain()})`, backgroundSize: '160px', mixBlendMode: style.palette.dark ? 'screen' : 'multiply', opacity: style.palette.dark ? 0.06 : 0.12 }}
+      />
     </div>
   );
 }
 
-function Caption({ text, type, animate, accent, beat }: { text: string; type: DayRecord['style']['type']['caption']; animate?: boolean; accent: string; beat: number }) {
-  const base: CSSProperties = { ...CAPTION_FONT[type], marginTop: '1.6cqw' };
-  if (!animate) return <p style={base}>{text}</p>;
-
-  if (type === 'hand')
-    return (
-      <motion.p style={base} initial={{ clipPath: 'inset(0 100% 0 0)' }} animate={{ clipPath: 'inset(0 0% 0 0)' }} transition={{ duration: 2.6, delay: 0.9, ease: 'easeOut' }}>
-        {text}
-      </motion.p>
-    );
-  if (type === 'serif')
-    return (
-      <motion.p style={base} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 3.2, delay: 1.2 }}>
-        {text}
-      </motion.p>
-    );
-  if (type === 'grotesk')
-    return (
-      <p style={base}>
-        {text.split(' ').map((w, i) => (
-          <motion.span
-            key={i}
-            className="inline-block"
-            style={{ marginRight: '0.4em', color: i % 4 === 2 ? accent : undefined }}
-            initial={{ opacity: 0, scale: 1.4 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.6 + i * beat, duration: 0.12 }}
-          >
-            {w}
-          </motion.span>
-        ))}
-      </p>
-    );
-  return (
-    <p style={base}>
-      {[...text].map((ch, i) => (
-        <motion.span key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 + i * 0.045, duration: 0.01 }}>
-          {ch}
-        </motion.span>
-      ))}
-    </p>
-  );
+/** Серый шум бумаги, нарисованный один раз (мягкий: соседние точки чуть сглажены). */
+let grain: string | undefined;
+function paperGrain() {
+  if (grain) return grain;
+  const n = 160;
+  const c = document.createElement('canvas');
+  c.width = c.height = n;
+  const g = c.getContext('2d')!;
+  const img = g.createImageData(n, n);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = 70 + Math.random() * 185;
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+    img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  g.globalAlpha = 0.5;
+  g.filter = 'blur(0.6px)';
+  g.drawImage(c, 0, 0);
+  grain = c.toDataURL('image/png');
+  return grain;
 }
 
 /** Грубое CSS-приближение шейдера — только если обложки ещё нет. */

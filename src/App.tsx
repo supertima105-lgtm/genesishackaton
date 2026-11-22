@@ -26,11 +26,11 @@ function useRoute() {
 
 export function App() {
   const route = useRoute();
-  const dayMatch = route.match(/^\/day\/([^/]+)(\/kino)?$/);
+  const dayMatch = route.match(/^\/day\/([^/]+)(?:\/kino)?$/); // старые ссылки на кинорежим ведут на страницу дня
   const cmpMatch = route.match(/^\/compare(?:\/([^/]+))?(?:\/([^/]+))?$/);
   const calMatch = route.match(/^\/calendar(?:\/(\d{4}(?:-\d{2})?))?$/);
   const newMatch = route.match(/^\/new(?:\?date=(\d{4}-\d{2}-\d{2}))?$/);
-  if (route === '/show') return <ShowPage />;
+  const show = route === '/show';
 
   const tab = (on: boolean, extra = '') =>
     `rounded-sm px-3 pt-1 pb-1.5 font-hand text-[21px] leading-none shadow-[0_2px_0_rgba(0,0,0,.08)] transition-transform hover:-translate-y-0.5 odd:-rotate-[1.5deg] even:rotate-[1.2deg] ${on ? 'bg-note' : 'bg-paper'} ${extra}`;
@@ -52,7 +52,7 @@ export function App() {
           <a href="#/compare" className={tab(Boolean(cmpMatch), 'hidden md:inline-block')}>
             сравнить
           </a>
-          <a href="#/show" className={tab(false, 'hidden md:inline-block')}>
+          <a href="#/show" className={tab(show, 'hidden md:inline-block')}>
             показ
           </a>
           <a href="#/system" className={tab(route === '/system', 'hidden sm:inline-block')}>
@@ -63,8 +63,10 @@ export function App() {
           </a>
         </nav>
       </header>
-      <main className={calMatch ? 'mx-auto max-w-7xl px-2 pt-2 sm:px-4' : 'sheet mx-auto max-w-7xl px-4 py-8 sm:px-8'}>
-        {newMatch ? (
+      <main className={calMatch || show ? 'mx-auto max-w-7xl px-2 pt-2 sm:px-4' : 'sheet mx-auto max-w-7xl px-4 py-8 sm:px-8'}>
+        {show ? (
+          <ShowPage />
+        ) : newMatch ? (
           <NewDay key={route} initialDate={newMatch[1]} />
         ) : calMatch ? (
           <CalendarPage period={calMatch[1]} />
@@ -73,7 +75,7 @@ export function App() {
         ) : cmpMatch ? (
           <ComparePage key={route} a={cmpMatch[1] && decodeURIComponent(cmpMatch[1])} b={cmpMatch[2] && decodeURIComponent(cmpMatch[2])} />
         ) : dayMatch ? (
-          <DayPage id={decodeURIComponent(dayMatch[1])} kino={Boolean(dayMatch[2])} />
+          <DayPage id={decodeURIComponent(dayMatch[1])} />
         ) : (
           <Archive />
         )}

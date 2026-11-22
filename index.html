@@ -10,6 +10,12 @@
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Caveat:wght@500;600;700&family=JetBrains+Mono:wght@400;500&family=Unbounded:wght@500;700&family=Lora:ital,wght@0,400;0,500;1,400&family=PT+Mono&display=swap"
       rel="stylesheet"
     />
+    <script>
+      // Открыт с диска двойным щелчком: исходник без Vite пустой — переходим на собранный файл.
+      if (location.protocol === 'file:' && !/\/docs\/index\.html$/i.test(location.pathname)) {
+        location.replace('docs/index.html' + location.hash);
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

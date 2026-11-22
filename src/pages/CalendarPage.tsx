@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode, type RefObject } from 'react';
 import { MODES } from '../lib/rules/modes';
-import { store } from '../lib/storage';
+import { thumbCached, thumbUrl, warmThumbs } from '../lib/thumb';
 import type { Axes, DayRecord, FileRef, ModeId } from '../lib/types';
 import { localToday, plural, useDays } from '../lib/useDays';
 
@@ -65,21 +65,27 @@ function useMedia(q: string) {
   return on;
 }
 
-/** URL файла с общим кэшем — чтобы при перелистывании фото не мигали. */
-const urlCache = new Map<string, string>();
+/**
+ * Копия страницы в полосе листа или у корешка: видна узкой полоской [x0, x1] (доли ширины страницы)
+ * и не кликается. Таких копий при перелистывании около двадцати, поэтому в них строятся только
+ * столбцы календаря, попадающие в полоску, и без всплывающих фото дня. null — настоящая страница.
+ */
+const View = createContext<readonly [number, number] | null>(null);
+const viewOf = (side: Side, s: number, w: number) => (side === 'right' ? ([s, s + w] as const) : ([1 - s - w, 1 - s] as const));
+/** Сетка месяца на правой странице: left 11%, right 6% — столбец c занимает эту долю ширины. */
+const colSpan = (c: number) => [0.11 + (c * 0.83) / 7, 0.11 + ((c + 1) * 0.83) / 7] as const;
+
+/** Уменьшенная копия фото с общим кэшем — марки лёгкие, и при перелистывании фото не мигают. */
+const THUMB = 420;
 function useFileUrl(ref?: FileRef) {
-  const [url, setUrl] = useState(() => (ref ? urlCache.get(ref.path) : undefined));
+  const [url, setUrl] = useState(() => thumbCached(ref, THUMB));
   useEffect(() => {
     if (!ref) return setUrl(undefined);
-    const hit = urlCache.get(ref.path);
+    const hit = thumbCached(ref, THUMB);
     if (hit) return setUrl(hit);
     let alive = true;
-    store
-      .fileUrl(ref)
-      .then((u) => {
-        urlCache.set(ref.path, u);
-        if (alive) setUrl(u);
-      })
+    thumbUrl(ref, THUMB)
+      .then((u) => alive && setUrl(u))
       .catch(() => {});
     return () => {
       alive = false;
@@ -186,6 +192,14 @@ export function CalendarPage({ period }: { period?: string }) {
 
   // куда листать — следует за адресом
   useEffect(() => setWant(target), [target]);
+
+  // пока смотрим разворот, в свободное время готовим марки соседних месяцев — лист не ждёт фото
+  useEffect(() => {
+    if (!days) return;
+    const near = new Set([step(shown, -1), step(shown, 1)]);
+    const refs = days.filter((d) => near.has(d.date.slice(0, 7))).map((d) => d.cover ?? d.photos[0]);
+    return warmThumbs(refs.filter((r): r is FileRef => Boolean(r)), THUMB);
+  }, [shown, days]);
 
   /** Плавно ведёт лист от p=from к p=to; на каждом кадре лист перерисовывается без React. */
   const tween = useCallback((from: number, to: number, ms: number, ease: (t: number) => number, done: () => void) => {
@@ -432,7 +446,9 @@ function StaticHalf({
                 {children}
               </Page>
             ) : (
-              <Page side={side}>{children}</Page>
+              <View.Provider value={viewOf(side, STATIC_S[k], w)}>
+                <Page side={side}>{children}</Page>
+              </View.Provider>
             )}
           </div>
           <div className="strip-shade" style={{ background: shadeGrad(STATIC_A, k, deg) }} />
@@ -527,7 +543,7 @@ function Leaf({
     >
       <div className="strip-face">
         <div className="strip-page" style={{ left: pageLeft(frontSide, LEAF_S[k], LEAF_W[k], dir === -1) }} inert>
-          {front}
+          <View.Provider value={viewOf(frontSide, LEAF_S[k], LEAF_W[k])}>{front}</View.Provider>
         </div>
         <div
           className="strip-shade"
@@ -538,7 +554,7 @@ function Leaf({
       </div>
       <div className="strip-face strip-under">
         <div className="strip-page" style={{ left: pageLeft(backSide, LEAF_S[k], LEAF_W[k], dir === 1) }} inert>
-          {back}
+          <View.Provider value={viewOf(backSide, LEAF_S[k], LEAF_W[k])}>{back}</View.Provider>
         </div>
         <div
           className="strip-shade"
@@ -810,8 +826,11 @@ function MonthLeft({ k, byDate, today }: Ctx & { k: string }) {
 
 function Polaroid({ day, slot, i }: { day: DayRecord; slot: [number, number, number, number]; i: number }) {
   const src = useFileUrl(day.cover ?? day.photos[0]);
+  const view = useContext(View);
   const [x0, y, w, r] = slot;
   const x = 4 + (x0 - 4) * 0.9; // справа — изгиб у корешка, коллаж держится от него подальше
+  // в копии-полоске не строим фото, которое в неё не попадает (с запасом на наклон и ленту)
+  if (view && ((x + w * 0.65) / 100 < view[0] || (x - w * 0.65) / 100 > view[1])) return null;
   const p = day.style.palette;
   const date = new Date(`${day.date}T12:00:00`).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }).replace('.', '');
   return (
@@ -1021,6 +1040,12 @@ function HandGrid({ rows, seed }: { rows: number; seed: string }) {
 }
 
 function Cell({ date, list, today, col, top }: { date: string; list?: DayRecord[]; today: string; col: number; top: boolean }) {
+  const view = useContext(View);
+  const lite = view !== null;
+  if (view) {
+    const [c0, c1] = colSpan(col);
+    if (c1 < view[0] - 0.03 || c0 > view[1] + 0.03) return <span />; // столбец не попадает в полоску
+  }
   const num = Number(date.slice(8));
   const isToday = date === today;
   const future = date > today;
@@ -1062,9 +1087,12 @@ function Cell({ date, list, today, col, top }: { date: string; list?: DayRecord[
       <span className="wash" style={vars({ '--c': day.style.palette.accent, '--r': `${jitter(`${day.id}w`, 40).toFixed(0)}deg` })} />
       {numEl}
       {isToday && <HandRing />}
-      {list.length > 1 && <MiniStamp day={list[1]} r={r - 9} behind />}
-      <MiniStamp day={day} r={r} />
-      <Peek day={day} down={top} more={list.length - 1} />
+      {/* марка занимает всё место под числом — дата остаётся открытой */}
+      <span className="stamp-zone">
+        {list.length > 1 && <MiniStamp day={list[1]} r={r - 7} behind />}
+        <MiniStamp day={day} r={r} />
+      </span>
+      {!lite && <Peek day={day} down={top} more={list.length - 1} />}
     </a>
   );
 }
@@ -1078,13 +1106,6 @@ function MiniStamp({ day, r, behind }: { day: DayRecord; r: number; behind?: boo
       <span className="stamp-mini">
         <span style={{ background: `linear-gradient(135deg, ${p.accent}, ${p.shades[1] ?? p.paper})` }}>{src && <img src={src} alt="" draggable={false} />}</span>
       </span>
-      {!behind && (
-        <svg className="postmark" viewBox="0 0 40 14" fill="none" stroke="currentColor" strokeWidth={1.1} strokeLinecap="round" aria-hidden>
-          <path d="M1 3 C 6 0.5, 10 5.5, 15 3 S 24 0.5, 29 3 S 36 5, 39 3" />
-          <path d="M1 7 C 6 4.5, 10 9.5, 15 7 S 24 4.5, 29 7 S 36 9, 39 7" />
-          <path d="M1 11 C 6 8.5, 10 13.5, 15 11 S 24 8.5, 29 11 S 36 13, 39 11" />
-        </svg>
-      )}
     </span>
   );
 }

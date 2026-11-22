@@ -206,12 +206,6 @@ export function buildStyle(
   };
   if (mo.transition === 'cut') mo.transitionShare = 0;
 
-  reasons.push({
-    source: 'музыка',
-    cause: `${Math.round(bpm)} BPM, напряжение ${f2(axes.tension)}, темп дня ${f2(axes.pace)}`,
-    effect: `кадр меняется каждые ${beatsPerShot} долей (${shotSeconds.toFixed(1)} с), переход «${TRANSITION_RU[mo.transition]}», сила пульса ${f2(mo.pulse)}`,
-  });
-
   const style: StyleParams = {
     mode: primary.id,
     secondary: secondary.id,

@@ -1,5 +1,6 @@
-import { Check, Circle, ImagePlus, LoaderCircle, Minus, Music2, X } from 'lucide-react';
+import { Check, Circle, ImagePlus, LoaderCircle, Minus, Music2, Pause, Play, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { LIBRARY, LIBRARY_ARTIST, libraryFile } from '../lib/library';
 import { createDay, type Step } from '../lib/pipeline';
 import { lookupSong, readAudioTags, type SongMeta } from '../lib/songMeta';
 import { localToday } from '../lib/useDays';
@@ -33,7 +34,7 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
   // ── песня: исполнитель и название определяются сами, ручная правка важнее ──
   const touched = useRef({ artist: false, title: false });
   const lookup = useRef<Promise<SongMeta | null> | null>(null);
-  const [songFound, setSongFound] = useState<null | 'looking' | 'link' | 'file' | 'none'>(null);
+  const [songFound, setSongFound] = useState<null | 'looking' | 'link' | 'file' | 'none' | 'preset'>(null);
   const applyMeta = (m: SongMeta | null, from: 'link' | 'file') => {
     if (!m) return;
     if (m.artist && !touched.current.artist) setArtist(m.artist);
@@ -76,8 +77,47 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
   };
 
   const onAudio = async (f?: File) => {
+    pickPreset(null);
     setAudio(f);
     if (f && !hasLink) applyMeta(await readAudioTags(f), 'file');
+  };
+
+  // ── готовая музыка: выбрать мелодию из библиотеки дневника и сразу её услышать ──
+  const [preset, setPreset] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ id: string; state: 'load' | 'play' } | null>(null);
+  const player = useRef<HTMLAudioElement | null>(null);
+  const stopPreview = () => {
+    player.current?.pause();
+    setPreview(null);
+  };
+  useEffect(() => () => player.current?.pause(), []);
+  const pickPreset = (id: string | null) => {
+    if (!id) {
+      if (preset) {
+        stopPreview();
+        setPreset(null);
+        setSongFound(null);
+      }
+      return;
+    }
+    if (preset === id && preview?.id === id) return stopPreview();
+    setPreset(id);
+    setPreview({ id, state: 'load' });
+    void libraryFile(id).then((f) => {
+      setAudio(f);
+      setArtist(LIBRARY_ARTIST);
+      setTitle(LIBRARY.find((t) => t.id === id)!.name);
+      touched.current = { artist: false, title: false };
+      setSongFound('preset');
+      const url = URL.createObjectURL(f);
+      player.current?.pause();
+      const a = new Audio(url);
+      a.volume = 0.8;
+      a.onended = () => setPreview((p) => (p?.id === id ? null : p));
+      player.current = a;
+      void a.play().catch(() => {});
+      setPreview((p) => (p?.id === id ? { id, state: 'play' } : p));
+    });
   };
 
   const submit = async () => {
@@ -173,12 +213,46 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
             <Music2 size={18} />
             <span className="text-sm">{audio ? audio.name : 'или аудиофайл — услышу темп и энергию'}</span>
             {audio && (
-              <button type="button" className="ml-auto" aria-label="Убрать файл" onClick={(e) => (e.preventDefault(), setAudio(undefined))}>
+              <button type="button" className="ml-auto" aria-label="Убрать файл" onClick={(e) => (e.preventDefault(), pickPreset(null), setAudio(undefined))}>
                 <X size={14} />
               </button>
             )}
             <input type="file" accept="audio/*" className="hidden" onChange={(e) => void onAudio(e.target.files?.[0])} />
           </label>
+
+          <div className="mt-5">
+            <div className="label normal-case tracking-normal">или готовая музыка дневника — нажмите, чтобы послушать и выбрать</div>
+            <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+              {LIBRARY.map((t, k) => {
+                const on = preset === t.id;
+                const st = preview?.id === t.id ? preview.state : null;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => pickPreset(t.id)}
+                    aria-pressed={on}
+                    className={`flex min-w-0 items-center gap-2.5 rounded-sm px-2.5 py-2 text-left shadow-[0_2px_0_rgba(0,0,0,.07)] transition-transform hover:-translate-y-0.5 ${on ? 'bg-note ring-2 ring-blue/60' : 'bg-white/60'}`}
+                    style={{ rotate: `${[-0.8, 0.6, -0.4, 0.9, -0.6, 0.4][k % 6]}deg` }}
+                  >
+                    {/* маленькая пластинка в цвет настроения */}
+                    <span
+                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-full text-white ${st === 'play' ? 'animate-[spin_3s_linear_infinite]' : ''}`}
+                      style={{ background: `radial-gradient(circle, ${t.color} 0 34%, #1d1a17 36% 100%)` }}
+                    >
+                      {st === 'load' ? <LoaderCircle size={13} className="animate-spin" /> : st === 'play' ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate font-hand text-[20px] leading-none font-semibold">{t.name}</span>
+                      <span className="mt-1 block truncate font-mono text-[10px] text-ink-soft">
+                        {t.bpm} BPM · {t.tags}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
             <input
               className="field"
@@ -202,7 +276,9 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
                   ? '✓ определено по файлу — можно поправить'
                   : songFound === 'none'
                     ? 'по ссылке не узнал — впишите сами'
-                    : ''}
+                    : songFound === 'preset'
+                      ? '✓ мелодия из дневника — темп и энергию услышу сам'
+                      : ''}
           </p>
         </div>
 
@@ -234,7 +310,7 @@ export function NewDay({ initialDate }: { initialDate?: string }) {
         {steps.length === 0 ? (
           <ul className="note space-y-1 text-[22px]">
             <li>фото → палитра</li>
-            <li>песня → ритм</li>
+            <li>песня → темп и лад</li>
             <li>текст → настроение</li>
           </ul>
         ) : (

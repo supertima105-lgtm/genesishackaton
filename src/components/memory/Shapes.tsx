@@ -1,12 +1,10 @@
-import { useEffect, useId, useMemo, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useId, useMemo, type CSSProperties, type ReactNode } from 'react';
 import { mulberry32 } from '../../lib/color';
 import type { StyleParams } from '../../lib/types';
-import { beatPulse, FRAMES, type Clock } from './layout';
+import { FRAMES } from './layout';
 
 interface Props {
   style: StyleParams;
-  clock?: Clock;
-  beatOffset: number;
   number: number;
 }
 
@@ -15,39 +13,14 @@ const H = 1250;
 
 /**
  * Графический слой поверх страницы: геометрия Кандинского, вырезки Матисса, мазки,
- * засветки плёнки или энсо. Форма генерируется из seed дня, цвет — из палитры фото,
- * движение — из долей песни (CSS-переменные --p и --t обновляются каждый кадр).
+ * засветки плёнки или энсо. Форма генерируется из seed дня, цвет — из палитры фото. Слой неподвижен.
  */
-export function Shapes({ style, clock, beatOffset, number }: Props) {
-  const ref = useRef<SVGSVGElement>(null);
+export function Shapes({ style, number }: Props) {
   const uid = useId().replace(/:/g, '');
-
-  useEffect(() => {
-    if (!clock) return;
-    let raf = 0;
-    const tick = () => {
-      const el = ref.current;
-      if (el) {
-        const t = clock.time();
-        const p = clock.playing() ? beatPulse(t, style.motion.bpm, beatOffset) * style.motion.pulse : 0;
-        const lv = clock.levels?.();
-        el.style.setProperty('--p', p.toFixed(3));
-        el.style.setProperty('--t', t.toFixed(2));
-        // живой бас качает формы, громкость разгорается в засветках
-        el.style.setProperty('--b', ((lv?.bass ?? 0) * 0.55 * (0.4 + style.motion.pulse)).toFixed(3));
-        el.style.setProperty('--l', (lv?.level ?? 0).toFixed(3));
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [clock, style.motion.bpm, style.motion.pulse, beatOffset]);
-
   const content = useMemo(() => render(style, uid, number), [style, uid, number]);
 
   return (
     <svg
-      ref={ref}
       data-shapes=""
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"

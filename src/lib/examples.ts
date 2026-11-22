@@ -49,6 +49,11 @@ async function source(): Promise<{ manifest: ExamplesManifest; blob: (f: FileRef
   }
 }
 
+/** Есть ли в этой сборке примеры дней. */
+export async function hasExamples(): Promise<boolean> {
+  return Boolean((await source())?.manifest.days.length);
+}
+
 /** Кладёт примеры в архив (дни с теми же id просто перезапишутся). Возвращает число дней. */
 export async function importExamples(): Promise<number> {
   const src = await source();
@@ -63,14 +68,24 @@ export async function importExamples(): Promise<number> {
   return src.manifest.days.length;
 }
 
-/** При первом открытии пустого дневника подкладывает примеры. Никогда не трогает непустой архив. */
+/**
+ * При первом открытии пустого дневника подкладывает примеры. Своих дней человека не трогает.
+ * Если примеры с тех пор обновились (другой exportedAt), докладывает свежие поверх прежних примеров.
+ */
 export async function ensureExamples() {
+  let seen: string | null = null;
   try {
-    if (localStorage.getItem(FLAG)) return;
+    seen = localStorage.getItem(FLAG);
   } catch {
     /* продолжаем без флага */
   }
+  if (seen === 'own-days') return;
   try {
+    if (seen) {
+      const src = await source();
+      if (src && src.manifest.exportedAt !== seen) await importExamples();
+      return;
+    }
     if ((await store.list()).length) {
       localStorage.setItem(FLAG, 'own-days');
       return;

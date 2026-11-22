@@ -1,9 +1,10 @@
-import { Clapperboard, Columns2, Search } from 'lucide-react';
-import { useMemo, useState, type CSSProperties } from 'react';
+import { BookOpen, Clapperboard, Columns2, Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { formatDate, MemoryCard } from '../components/memory/MemoryCard';
-import { YearStrip } from '../components/YearStrip';
-import { exportExamples, importExamples } from '../lib/examples';
+import { Quilt } from '../components/Quilt';
+import { exportExamples, hasExamples, importExamples } from '../lib/examples';
 import { store } from '../lib/storage';
+import { thumbCached, thumbUrl } from '../lib/thumb';
 import type { DayRecord } from '../lib/types';
 import { numberDays, plural, useDays, useFileUrls } from '../lib/useDays';
 
@@ -76,7 +77,7 @@ export function Archive() {
       </div>
 
       {!q && <OnThisDay days={days} numbers={numbers} />}
-      {!q && <YearStrip days={days} />}
+      {!q && <Quilt days={days} />}
 
       {groups.map(([month, list]) => (
         <div key={month} className="mb-12">
@@ -96,17 +97,50 @@ export function Archive() {
 
 const TILTS = [-2.4, 1.8, -1.2, 2.2, -1.8, 1.1];
 
+/** Карточка дорисовывается, только когда до неё почти доскроллили: год из 300+ дней не строится разом. */
+function useNear<T extends Element>() {
+  const ref = useRef<T>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || near) return;
+    const io = new IntersectionObserver(([e]) => e.isIntersecting && setNear(true), { rootMargin: '900px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [near]);
+  return [ref, near] as const;
+}
+
+/** Уменьшенная копия обложки (или первого фото) — карточке в 300 px не нужно фото в 1600. */
+function useCardImage(day: DayRecord, on: boolean) {
+  const ref = day.cover ?? day.photos[0];
+  const [url, setUrl] = useState(() => thumbCached(ref, 640));
+  useEffect(() => {
+    if (!on || !ref || url) return;
+    let alive = true;
+    thumbUrl(ref, 640).then((u) => alive && setUrl(u));
+    return () => {
+      alive = false;
+    };
+  }, [on, ref, url]);
+  return url;
+}
+
 /** День в архиве — полароид на кнопке, у каждого свой наклон. */
 function ArchiveCard({ day, number, index }: { day: DayRecord; number: number; index: number }) {
-  const cover = useFileUrls(day.cover ? [day.cover] : undefined);
-  const first = useFileUrls(day.photos.slice(0, 1));
+  const [box, near] = useNear<HTMLAnchorElement>();
+  const src = useCardImage(day, near);
   return (
-    <a href={`#/day/${encodeURIComponent(day.id)}`} className="group block">
+    <a ref={box} href={`#/day/${encodeURIComponent(day.id)}`} className="group block">
       <div
         className="polaroid pin rotate-(--tilt) pb-3 transition-transform duration-300 group-hover:-translate-y-1 group-hover:rotate-0"
         style={{ '--tilt': `${TILTS[index % TILTS.length]}deg` } as CSSProperties}
       >
-        <MemoryCard day={day} number={number} photoUrls={first ?? []} coverUrl={cover?.[0]} />
+        {near ? (
+          <MemoryCard day={day} number={number} photoUrls={src && !day.cover ? [src] : []} coverUrl={day.cover ? src : undefined} />
+        ) : (
+          <div className="w-full" style={{ aspectRatio: '4 / 5', background: day.style.palette.paper }} />
+        )}
         <div className="mt-2 flex items-baseline justify-between gap-2">
           <span className="truncate font-hand text-[22px] leading-tight">{day.title}</span>
           <span className="label shrink-0">{formatDate(day.date).short}</span>
@@ -116,9 +150,14 @@ function ArchiveCard({ day, number, index }: { day: DayRecord; number: number; i
   );
 }
 
-/** Пустой дневник: можно посмотреть на примеры дней. */
+/** Пустой дневник: можно посмотреть на примеры дней — если они есть в этой сборке. */
 function ExamplesButton() {
   const [state, setState] = useState<'idle' | 'busy' | 'none'>('idle');
+  const [available, setAvailable] = useState(false);
+  useEffect(() => {
+    void hasExamples().then(setAvailable);
+  }, []);
+  if (!available) return null;
   if (state === 'none') return <span className="label self-center">примеров нет в этой сборке</span>;
   return (
     <button
@@ -204,8 +243,8 @@ function OnThisDay({ days, numbers }: { days: DayRecord[]; numbers: Map<string, 
         <p className="mt-2 text-lg text-ink-soft italic">{day.signals.text.caption}</p>
         <p className="mt-2 line-clamp-2 max-w-2xl text-sm text-ink-soft">{day.text}</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          <a href={`#/day/${day.id}/kino`} className="btn btn-solid">
-            <Clapperboard size={14} /> Вспомнить
+          <a href={`#/day/${day.id}`} className="btn btn-solid">
+            <BookOpen size={14} /> Открыть день
           </a>
           {latest && latest.id !== day.id && (
             <a href={`#/compare/${day.id}/${latest.id}`} className="btn">

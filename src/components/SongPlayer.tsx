@@ -1,25 +1,26 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { Pause, Play } from 'lucide-react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import WaveSurfer from 'wavesurfer.js';
+import { useSongCover } from '../lib/songCover';
 import type { DayRecord } from '../lib/types';
 
 interface Props {
   day: DayRecord;
   excerptUrl?: string;
-  onMedia: (el: HTMLMediaElement | null) => void;
-  /** день «проживается» — пластинка выезжает из конверта и крутится */
-  playing?: boolean;
 }
 
 /** Пластинка дня и под ней — фрагмент песни с волной (wavesurfer) или официальный плеер сервиса по ссылке. */
-export function SongPlayer({ day, excerptUrl, onMedia, playing = false }: Props) {
+export function SongPlayer({ day, excerptUrl }: Props) {
   const box = useRef<HTMLDivElement>(null);
+  const ws = useRef<WaveSurfer | null>(null);
+  const [playing, setPlaying] = useState(false);
   const { ink, accent } = day.style.palette;
 
   useEffect(() => {
     if (!excerptUrl || !box.current) return;
     const el = new Audio();
-    if (/^https?:/.test(excerptUrl)) el.crossOrigin = 'anonymous'; // живой анализ звука работает и для Supabase
-    const ws = WaveSurfer.create({
+    if (/^https?:/.test(excerptUrl)) el.crossOrigin = 'anonymous';
+    const w = WaveSurfer.create({
       container: box.current,
       media: el,
       url: excerptUrl,
@@ -32,45 +33,58 @@ export function SongPlayer({ day, excerptUrl, onMedia, playing = false }: Props)
       barRadius: 2,
       normalize: true,
     });
-    const media = ws.getMediaElement();
-    if (media) media.loop = true;
-    onMedia(media ?? null);
+    w.on('play', () => setPlaying(true));
+    w.on('pause', () => setPlaying(false));
+    w.on('finish', () => setPlaying(false));
+    ws.current = w;
     return () => {
-      onMedia(null);
-      ws.destroy();
+      ws.current = null;
+      setPlaying(false);
+      w.destroy();
     };
-  }, [excerptUrl, ink, accent, day.style.palette.dark, onMedia]);
+  }, [excerptUrl, ink, accent, day.style.palette.dark]);
 
   const embed = day.song.link?.embedUrl;
   const height = day.song.link?.provider === 'spotify' ? 152 : day.song.link?.provider === 'youtube' ? 200 : 120;
 
   const showEmbed = !excerptUrl && embed;
   const era = day.signals.music.era;
+  const cover = useSongCover(day);
 
-  // пластинка дня: винил выглядывает из бумажного конверта и выезжает, когда день играет
+  // пластинка дня: винил выглядывает из бумажного конверта
   return (
     <div>
       <div className="label">пластинка дня</div>
       <div className="relative mt-3 aspect-[340/178] w-full max-w-[340px]">
-        <div
-          className={`absolute top-[5.1%] left-[20%] aspect-square w-[47%] transition-transform duration-700 ease-out ${playing ? 'translate-x-[70%]' : 'translate-x-[38%]'}`}
-          aria-hidden
-        >
-          <div className={`vinyl h-full w-full ${playing ? 'spinning' : ''}`} style={{ '--label': accent } as CSSProperties}>
-            <span className="absolute top-[38%] left-1/2 -translate-x-1/2 font-mono text-[9px] tracking-widest text-white/80 mix-blend-difference">33⅓</span>
-          </div>
+        <div className="absolute top-[5.1%] left-[20%] aspect-square w-[47%] translate-x-[38%]" aria-hidden>
+          <div className="vinyl h-full w-full" style={{ '--label': accent } as CSSProperties} />
           <div className="vinyl-sheen" />
         </div>
-        <div className="sleeve absolute top-0 left-0 z-10 flex aspect-square w-[52%] -rotate-2 flex-col justify-end p-[7%]">
-          <div className="absolute top-[7%] right-[8%] font-mono text-[10px] text-ink-soft">
+        <div className="sleeve absolute top-0 left-0 z-10 flex aspect-square w-[52%] -rotate-2 flex-col justify-end overflow-hidden p-[7%]">
+          {cover && (
+            <>
+              <img src={cover} alt="" className="absolute inset-0 h-full w-full object-cover" draggable={false} />
+              <span className="sleeve-shade" aria-hidden />
+            </>
+          )}
+          <div className={`absolute top-[7%] right-[8%] font-mono text-[10px] ${cover ? 'rounded-full bg-black/35 px-1.5 text-white' : 'text-ink-soft'}`}>
             ♪ {Math.round(day.style.motion.bpm)}
             {era ? ` · ’${String(era).slice(-2)}` : ''}
           </div>
-          <div className="line-clamp-3 font-hand text-[clamp(22px,7vw,30px)] leading-[0.95] font-bold">{day.song.title}</div>
-          <div className="mt-1 truncate font-mono text-[11px]">{day.song.artist}</div>
+          <div className={`relative ${cover ? 'text-white [text-shadow:0_1px_3px_rgba(0,0,0,.6)]' : ''}`}>
+            <div className="line-clamp-3 font-hand text-[clamp(22px,7vw,30px)] leading-[0.95] font-bold">{day.song.title}</div>
+            <div className="mt-1 truncate font-mono text-[11px]">{day.song.artist}</div>
+          </div>
         </div>
       </div>
-      {excerptUrl && <div ref={box} className="mt-4" />}
+      {excerptUrl && (
+        <div className="mt-4 flex items-center gap-3">
+          <button type="button" className="btn shrink-0" onClick={() => void ws.current?.playPause()} aria-label={playing ? 'Пауза' : 'Слушать песню'}>
+            {playing ? <Pause size={14} /> : <Play size={14} />} {playing ? 'Пауза' : 'Слушать'}
+          </button>
+          <div ref={box} className="min-w-0 flex-1" />
+        </div>
+      )}
       {showEmbed && (
         <iframe
           title="Песня дня"

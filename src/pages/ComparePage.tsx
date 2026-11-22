@@ -1,14 +1,11 @@
-import { Pause, Play } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { LiveMeter } from '../components/LiveMeter';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { formatDate, MemoryCard } from '../components/memory/MemoryCard';
 import { AXES } from '../components/WhyPanel';
-import { usePlayer } from '../lib/player';
-import { TRANSITION_RU } from '../lib/rules/engine';
 import { CAPTION_RU, dayDistance, FRAME_RU, mostContrasting, SHAPES_RU, treatment } from '../lib/rules/labels';
 import { MODES } from '../lib/rules/modes';
 import type { DayRecord } from '../lib/types';
-import { numberDays, useDays, useFileUrls } from '../lib/useDays';
+import { numberDays, plural, useDays, useFileUrls } from '../lib/useDays';
 import { weatherShort } from '../lib/weather';
 
 const SAME = [
@@ -23,7 +20,6 @@ const SAME = [
 export function ComparePage({ a, b }: { a?: string; b?: string }) {
   const { days, error } = useDays();
   const numbers = useMemo(() => numberDays(days ?? []), [days]);
-  const [active, setActive] = useState<0 | 1 | null>(null);
 
   const pair = useMemo(() => {
     if (!days || days.length < 2) return null;
@@ -56,10 +52,7 @@ export function ComparePage({ a, b }: { a?: string; b?: string }) {
     ['обработка', (d) => treatment(d.style.shader)],
     ['графика', (d) => SHAPES_RU[d.style.shapes.kind]],
     ['подпись', (d) => CAPTION_RU[d.style.type.caption]],
-    [
-      'ритм',
-      (d) => `${Math.round(d.style.motion.bpm)} BPM · кадр каждые ${d.style.motion.beatsPerShot} долей · ${TRANSITION_RU[d.style.motion.transition]}`,
-    ],
+    ['песня', (d) => `${Math.round(d.style.motion.bpm)} BPM · ${d.signals.music.mode === 'major' ? 'мажор' : 'минор'}`],
     ['погода', (d) => (d.signals.weather ? weatherShort(d.signals.weather) : '—')],
     [
       'палитра',
@@ -87,8 +80,6 @@ export function ComparePage({ a, b }: { a?: string; b?: string }) {
             days={days}
             exclude={side === 0 ? B.id : A.id}
             onSelect={(id) => select(side as 0 | 1, id)}
-            active={active === side}
-            onPlay={() => setActive(side as 0 | 1)}
           />
         ))}
       </div>
@@ -159,8 +150,6 @@ function Side({
   days,
   exclude,
   onSelect,
-  active,
-  onPlay,
   letter,
 }: {
   letter: string;
@@ -169,55 +158,175 @@ function Side({
   days: DayRecord[];
   exclude: string;
   onSelect: (id: string) => void;
-  active: boolean;
-  onPlay: () => void;
 }) {
   const photoUrls = useFileUrls(day.photos);
-  const excerptUrl = useFileUrls(day.songFile ? [day.songFile] : undefined)?.[0];
-  const player = usePlayer(day, excerptUrl);
-  const { pause, playing } = player;
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const thumb = useFileUrls(day.cover ? [day.cover] : day.photos.slice(0, 1))?.[0];
 
-  // играет только одна сторона — иначе две песни спорят
+  // календарь закрывается по Esc и по щелчку мимо
   useEffect(() => {
-    if (!active && playing) pause();
-  }, [active, playing, pause]);
-
-  const sorted = useMemo(() => [...days].sort((x, y) => y.date.localeCompare(x.date)), [days]);
+    if (!open) return;
+    const away = (e: PointerEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('pointerdown', away);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [open]);
 
   return (
     <div className="min-w-0">
-      <div className="mb-3 flex items-baseline gap-3">
-        <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full font-mono text-[10px] text-white" style={{ background: day.style.palette.accent }}>
-          {letter}
-        </span>
-        <select value={day.id} onChange={(e) => onSelect(e.target.value)} className="field font-serif text-xl" aria-label="Выбрать день">
-          {sorted
-            .filter((d) => d.id !== exclude)
-            .map((d) => (
-              <option key={d.id} value={d.id}>
-                {formatDate(d.date).short} · {d.title}
-              </option>
-            ))}
-        </select>
-      </div>
-      {photoUrls && photoUrls.length > 0 ? (
-        <MemoryCard day={day} number={number} photoUrls={photoUrls} live clock={player.clock} playKey={player.playKey} />
-      ) : (
-        <div className="aspect-[4/5] w-full animate-pulse" style={{ background: day.style.palette.paper }} />
-      )}
-      <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+      <div ref={box} className="relative mb-4">
         <button
           type="button"
-          className="btn btn-solid"
-          onClick={() => {
-            if (!playing) onPlay();
-            player.toggle();
-          }}
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="group flex w-full items-center gap-3 border-b border-dashed border-line pb-3 text-left"
         >
-          {playing ? <Pause size={14} /> : <Play size={14} />} {playing ? 'Пауза' : 'Прожить'}
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full font-mono text-[10px] text-white" style={{ background: day.style.palette.accent }}>
+            {letter}
+          </span>
+          <span className="block h-12 w-12 shrink-0 -rotate-3 bg-white p-[3px] shadow-[0_2px_4px_rgba(0,0,0,.2)]">
+            <span className="block h-full w-full" style={{ background: day.style.palette.accent }}>
+              {thumb && <img src={thumb} alt="" className="h-full w-full object-cover" />}
+            </span>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block font-mono text-[11px] text-ink-soft uppercase">{formatDate(day.date).long}</span>
+            <span className="block truncate font-hand text-[26px] leading-none font-semibold">{day.title}</span>
+          </span>
+          <span className={`btn shrink-0 ${open ? 'bg-note' : ''}`}>
+            <CalendarDays size={14} /> {open ? 'закрыть' : 'другой день'}
+          </span>
         </button>
-        <LiveMeter clock={player.clock} style={day.style} />
+        {open && (
+          <DayPicker
+            days={days}
+            value={day}
+            exclude={exclude}
+            otherLetter={letter === 'А' ? 'Б' : 'А'}
+            onPick={(id) => {
+              setOpen(false);
+              onSelect(id);
+            }}
+          />
+        )}
+      </div>
+      {photoUrls && photoUrls.length > 0 ? (
+        <MemoryCard day={day} number={number} photoUrls={photoUrls} live />
+      ) : (
+        <div className="aspect-[4/5] w-full" style={{ background: day.style.palette.paper }} />
+      )}
+    </div>
+  );
+}
+
+// ── выбор дня: обычный календарь месяца, в клетках — фото дня ──────
+
+const WEEK = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+const TILT = [-2, 1.5, -1, 2, -1.5, 1];
+
+function DayPicker({ days, value, exclude, otherLetter, onPick }: { days: DayRecord[]; value: DayRecord; exclude: string; otherLetter: string; onPick: (id: string) => void }) {
+  const byDate = useMemo(() => {
+    const m = new Map<string, DayRecord[]>();
+    for (const d of [...days].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) m.set(d.date, [...(m.get(d.date) ?? []), d]);
+    return m;
+  }, [days]);
+  // листаем только месяцы, где есть записи — пустые страницы не нужны
+  const months = useMemo(() => [...new Set(days.map((d) => d.date.slice(0, 7)))].sort(), [days]);
+  const [month, setMonth] = useState(value.date.slice(0, 7));
+  const at = months.indexOf(month);
+
+  const [y, m] = month.split('-').map(Number);
+  const lead = (new Date(y, m - 1, 1).getDay() + 6) % 7;
+  const dim = new Date(y, m, 0).getDate();
+  const title = new Date(y, m - 1, 15).toLocaleDateString('ru-RU', { month: 'long' });
+  const inMonth = days.filter((d) => d.date.startsWith(month)).length;
+
+  return (
+    <div className="sheet absolute top-full right-0 left-0 z-40 mt-2 px-4 pt-4 pb-5 shadow-[0_26px_50px_-22px_rgba(40,25,5,.65)] sm:px-5">
+      <div className="flex items-center justify-between gap-3">
+        <button type="button" className="btn px-2" onClick={() => setMonth(months[at - 1])} disabled={at <= 0} aria-label="Предыдущий месяц">
+          <ChevronLeft size={16} />
+        </button>
+        <div className="text-center">
+          <div className="-rotate-1 font-hand text-[32px] leading-none font-bold">
+            <span className="capitalize">{title}</span> <span className="text-ink-soft">{y}</span>
+          </div>
+          <div className="mt-1 font-mono text-[10px] tracking-wider text-ink-soft uppercase">
+            {inMonth} {plural(inMonth, 'день', 'дня', 'дней')} · узнайте свой день по фото
+          </div>
+        </div>
+        <button type="button" className="btn px-2" onClick={() => setMonth(months[at + 1])} disabled={at < 0 || at >= months.length - 1} aria-label="Следующий месяц">
+          <ChevronRight size={16} />
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-7 gap-1.5 sm:gap-2">
+        {WEEK.map((w, k) => (
+          <div key={w} className={`pb-1 text-center font-hand text-[18px] leading-none ${k > 4 ? 'text-rust' : 'text-ink-soft'}`}>
+            {w}
+          </div>
+        ))}
+        {Array.from({ length: lead }, (_, k) => (
+          <span key={`l${k}`} />
+        ))}
+        {Array.from({ length: dim }, (_, k) => {
+          const date = `${month}-${String(k + 1).padStart(2, '0')}`;
+          const list = byDate.get(date);
+          if (!list)
+            return (
+              <div key={date} className="aspect-square border border-dashed border-line/80 p-1 font-hand text-[15px] leading-none text-ink-soft/60">
+                {k + 1}
+              </div>
+            );
+          const pick = list.find((d) => d.id !== exclude) ?? list[0];
+          return (
+            <PickCell
+              key={date}
+              day={pick}
+              n={k + 1}
+              more={list.length - 1}
+              tilt={TILT[k % TILT.length]}
+              current={list.some((d) => d.id === value.id)}
+              taken={list.every((d) => d.id === exclude) ? otherLetter : null}
+              onPick={() => onPick(pick.id)}
+            />
+          );
+        })}
       </div>
     </div>
+  );
+}
+
+function PickCell({ day, n, more, tilt, current, taken, onPick }: { day: DayRecord; n: number; more: number; tilt: number; current: boolean; taken: string | null; onPick: () => void }) {
+  const src = useFileUrls(day.cover ? [day.cover] : day.photos.slice(0, 1))?.[0];
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      disabled={Boolean(taken)}
+      title={`${formatDate(day.date).long} — ${day.title}`}
+      className={`group relative aspect-square bg-white p-[3px] shadow-[0_2px_5px_rgba(40,25,5,.28)] transition-transform hover:z-10 hover:scale-[1.12] hover:rotate-0 disabled:cursor-not-allowed ${current ? 'ring-2 ring-blue ring-offset-1 ring-offset-paper' : ''}`}
+      style={{ rotate: current ? '0deg' : `${tilt}deg` }}
+    >
+      <span className="relative block h-full w-full overflow-hidden" style={{ background: day.style.palette.accent }}>
+        {src && <img src={src} alt="" className={`h-full w-full object-cover ${taken ? 'opacity-40 grayscale' : ''}`} draggable={false} />}
+        {/* название проявляется при наведении — вспомнить, что это был за день */}
+        <span className="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/75 to-transparent px-1 pt-3 pb-0.5 text-left font-hand text-[13px] leading-[1.05] text-white transition-transform group-hover:translate-y-0">
+          {day.title}
+        </span>
+      </span>
+      <span className="absolute top-0.5 left-0.5 bg-paper/90 px-1 font-hand text-[14px] leading-none font-semibold">{n}</span>
+      {more > 0 && <span className="absolute top-0.5 right-0.5 bg-ink/75 px-1 font-mono text-[9px] leading-[14px] text-paper">+{more}</span>}
+      {taken && (
+        <span className="absolute inset-0 grid place-items-center">
+          <span className="grid h-6 w-6 place-items-center rounded-full bg-ink/70 font-mono text-[10px] text-white">{taken}</span>
+        </span>
+      )}
+    </button>
   );
 }

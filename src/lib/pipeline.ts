@@ -92,7 +92,7 @@ function reportStyle(style: DayRecord['style'], report: Report) {
     id: 'style',
     label: 'Подбираю почерк страницы',
     status: 'done',
-    detail: `${MODES[style.mode].name} + ${MODES[style.secondary].name} · ${style.motion.beatsPerShot} долей на кадр`,
+    detail: `${MODES[style.mode].name} + ${MODES[style.secondary].name}`,
     swatches: [style.palette.paper, style.palette.accent, style.palette.ink, ...style.palette.shades.slice(0, 3)],
   });
 }
