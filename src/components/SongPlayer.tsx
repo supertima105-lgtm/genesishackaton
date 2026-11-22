@@ -68,7 +68,11 @@ function ExcerptWindow({ day, url }: { day: DayRecord; url: string }) {
     return () => {
       ws.current = null;
       setPlaying(false);
+      // свой аудиоэлемент WaveSurfer при destroy не глушит: после «назад» песня играла бы без плеера
+      el.pause();
       w.destroy();
+      el.removeAttribute('src');
+      el.load();
     };
   }, [url]);
 
